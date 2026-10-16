@@ -724,10 +724,53 @@ async function initIdentity() {
 }
 if (!isMockMode()) initIdentity();
 
-// 6. Character Controls (W A S D + Third-Person Camera)
+// 6. Character Controls & Orbit Camera (Mouse Drag / Touch / Q & E)
 const keys: Record<string, boolean> = {};
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+// Orbit Camera Angles & Distances
+let cameraYaw = Math.PI; // In radians (starts looking North down the avenue)
+let cameraPitch = 0.32;  // In radians (slight downward pitch)
+let cameraDistance = 7.5;
+
+let isDraggingCamera = false;
+let previousPointerX = 0;
+let previousPointerY = 0;
+
+window.addEventListener('pointerdown', (e) => {
+  // Ignore clicks on interactive UI if any
+  isDraggingCamera = true;
+  previousPointerX = e.clientX;
+  previousPointerY = e.clientY;
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDraggingCamera) return;
+  const deltaX = e.clientX - previousPointerX;
+  const deltaY = e.clientY - previousPointerY;
+  previousPointerX = e.clientX;
+  previousPointerY = e.clientY;
+
+  // Horizontal orbit rotation (Yaw)
+  cameraYaw -= deltaX * 0.005;
+
+  // Vertical orbit pitch (clamped between 0.05 and 1.1 radians)
+  cameraPitch = Math.max(0.05, Math.min(1.1, cameraPitch + deltaY * 0.004));
+});
+
+window.addEventListener('pointerup', () => {
+  isDraggingCamera = false;
+});
+
+window.addEventListener('pointercancel', () => {
+  isDraggingCamera = false;
+});
+
+// Mouse wheel zoom
+window.addEventListener('wheel', (e) => {
+  cameraDistance = Math.max(3.5, Math.min(15.0, cameraDistance + Math.sign(e.deltaY) * 0.8));
+}, { passive: true });
 
 // Player life state & position
 let playerPos = new THREE.Vector3(11.2, 0.05, 16);
@@ -934,22 +977,39 @@ function animate() {
       respawnPlayer();
     }
   } else {
-    let moveX = 0;
-    let moveZ = 0;
-    if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+    // Rotate camera view using Q and E keys
+    if (keys['KeyQ']) cameraYaw += 1.8 * dt;
+    if (keys['KeyE']) cameraYaw -= 1.8 * dt;
 
-    const isMoving = moveX !== 0 || moveZ !== 0;
+    let inputX = 0;
+    let inputZ = 0;
+    if (keys['KeyW'] || keys['ArrowUp']) inputZ -= 1;
+    if (keys['KeyS'] || keys['ArrowDown']) inputZ += 1;
+    if (keys['KeyA'] || keys['ArrowLeft']) inputX -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) inputX += 1;
+
+    const isMoving = inputX !== 0 || inputZ !== 0;
 
     if (isMoving) {
-      const inputAngle = Math.atan2(moveX, moveZ);
-      playerYaw = inputAngle + Math.PI;
+      // Calculate world movement vectors relative to camera view angle
+      const forwardAngle = cameraYaw + Math.PI;
+      const forwardX = Math.sin(forwardAngle);
+      const forwardZ = Math.cos(forwardAngle);
 
-      const norm = Math.hypot(moveX, moveZ);
-      const targetDeltaX = (moveX / norm) * moveSpeed * dt;
-      const targetDeltaZ = (moveZ / norm) * moveSpeed * dt;
+      const rightX = -forwardZ;
+      const rightZ = forwardX;
+
+      const norm = Math.hypot(inputX, inputZ);
+      const dirForward = -inputZ / norm; // W is forward
+      const dirRight = inputX / norm;    // D is right
+
+      const moveX = forwardX * dirForward + rightX * dirRight;
+      const moveZ = forwardZ * dirForward + rightZ * dirRight;
+
+      playerYaw = Math.atan2(moveX, moveZ);
+
+      const targetDeltaX = moveX * moveSpeed * dt;
+      const targetDeltaZ = moveZ * moveSpeed * dt;
 
       // Candidate new position
       let nextX = playerPos.x + targetDeltaX;
@@ -1006,14 +1066,18 @@ function animate() {
     playerGroup.rotation.y = playerYaw;
   }
 
-  // Smooth Third-person chase camera follow relative to player's position
+  // Smooth Orbit Third-person camera follow relative to player's position
+  const camHorizontalDist = cameraDistance * Math.cos(cameraPitch);
+  const camVerticalOffset = cameraDistance * Math.sin(cameraPitch);
+
   const targetCamPos = new THREE.Vector3(
-    playerPos.x,
-    playerPos.y + 3.8,
-    playerPos.z + 7.5
+    playerPos.x + Math.sin(cameraYaw) * camHorizontalDist,
+    playerPos.y + 1.2 + camVerticalOffset,
+    playerPos.z + Math.cos(cameraYaw) * camHorizontalDist
   );
-  camera.position.lerp(targetCamPos, 0.12);
-  camera.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+
+  camera.position.lerp(targetCamPos, 0.15);
+  camera.lookAt(playerPos.x, playerPos.y + 1.3, playerPos.z);
 
   // Check Hit Collision between Player and Moving Cars
   if (!isDead) {
