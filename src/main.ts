@@ -123,6 +123,25 @@ crossStreetZs.forEach((crossZ) => {
 });
 
 // 4. Bustling City Infrastructure: Buildings, Market Stalls, Billboards & Street Lamps
+// Collision Obstacle System for Physical Solid Objects
+interface WorldCollider {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+const worldColliders: WorldCollider[] = [];
+
+function registerObstacle(x: number, z: number, width: number, depth: number) {
+  worldColliders.push({
+    minX: x - width / 2,
+    maxX: x + width / 2,
+    minZ: z - depth / 2,
+    maxZ: z + depth / 2
+  });
+}
+
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
 const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8e, roughness: 0.7 });
 const commercialMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, roughness: 0.6 });
@@ -159,6 +178,7 @@ for (let i = 0; i < 28; i++) {
   bL.castShadow = true;
   bL.receiveShadow = true;
   scene.add(bL);
+  registerObstacle(-18, zPos, w, d);
 
   // Storefront glass window on ground floor
   const shopWindowL = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
@@ -173,6 +193,7 @@ for (let i = 0; i < 28; i++) {
   bR.castShadow = true;
   bR.receiveShadow = true;
   scene.add(bR);
+  registerObstacle(18, zPos, w, d);
 
   const shopWindowR = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
   shopWindowR.rotation.y = -Math.PI / 2;
@@ -230,6 +251,7 @@ marketZCoords.forEach((mz, idx) => {
     table.position.set(mx, 0.45, mz);
     table.castShadow = true;
     scene.add(table);
+    registerObstacle(mx, mz, 1.8, 2.2);
 
     // Parasol Canopy (Striped umbrella / tarp)
     const canopyColor = canopyColors[(idx + sideIdx) % canopyColors.length];
@@ -326,6 +348,7 @@ crossStreetZs.forEach((cz) => {
     bNorth.castShadow = true;
     bNorth.receiveShadow = true;
     scene.add(bNorth);
+    registerObstacle(xStep, cz + 15, w, d);
 
     // South side of cross street
     const bSouth = new THREE.Mesh(buildingGeo, buildingMat);
@@ -334,6 +357,7 @@ crossStreetZs.forEach((cz) => {
     bSouth.castShadow = true;
     bSouth.receiveShadow = true;
     scene.add(bSouth);
+    registerObstacle(xStep, cz - 15, w, d);
   }
 });
 
@@ -388,6 +412,12 @@ parkedSpots.forEach((spot) => {
   mesh.position.set(spot.x, 0, spot.z);
   mesh.rotation.y = spot.yaw;
   scene.add(mesh);
+
+  const length = spot.type === 'danfo' ? 5.2 : spot.type === 'sedan' ? 4.5 : 2.5;
+  const width = 2.4;
+  // If vehicle is parked perpendicular (along cross streets, yaw approx +/- PI/2)
+  const isPerp = Math.abs(Math.sin(spot.yaw)) > 0.5;
+  registerObstacle(spot.x, spot.z, isPerp ? length : width, isPerp ? width : length);
 });
 
 // B. Moving Vehicles (Organized in distinct lanes with collision avoidance)
@@ -741,8 +771,39 @@ function animate() {
       playerYaw = inputAngle + Math.PI;
 
       const norm = Math.hypot(moveX, moveZ);
-      playerPos.x += (moveX / norm) * moveSpeed * dt;
-      playerPos.z += (moveZ / norm) * moveSpeed * dt;
+      const targetDeltaX = (moveX / norm) * moveSpeed * dt;
+      const targetDeltaZ = (moveZ / norm) * moveSpeed * dt;
+
+      // Candidate new position
+      let nextX = playerPos.x + targetDeltaX;
+      let nextZ = playerPos.z + targetDeltaZ;
+
+      // Player physical collision radius
+      const PLAYER_RADIUS = 0.45;
+
+      // Helper to check if a circle at (cx, cz) overlaps any registered solid obstacle
+      function collidesWithObstacles(cx: number, cz: number): boolean {
+        for (const obs of worldColliders) {
+          if (
+            cx + PLAYER_RADIUS > obs.minX &&
+            cx - PLAYER_RADIUS < obs.maxX &&
+            cz + PLAYER_RADIUS > obs.minZ &&
+            cz - PLAYER_RADIUS < obs.maxZ
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Check collision on X axis (allows sliding along walls)
+      if (!collidesWithObstacles(nextX, playerPos.z)) {
+        playerPos.x = nextX;
+      }
+      // Check collision on Z axis (allows sliding along walls)
+      if (!collidesWithObstacles(playerPos.x, nextZ)) {
+        playerPos.z = nextZ;
+      }
 
       // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
       const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
