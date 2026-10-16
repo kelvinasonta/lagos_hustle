@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { AvatarGenerator } from './character/AvatarGenerator';
 import { askStartNg, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
+import { createVehicle, VehicleType } from './vehicles/DanfoGenerator';
 
 // 1. Scene setup
 const container = document.getElementById('canvas-container')!;
@@ -183,6 +184,132 @@ crossStreetZs.forEach((cz) => {
   }
 });
 
+// 5. Vehicles (Parked along curbs + Many in active motion)
+interface TrafficVehicle {
+  mesh: THREE.Group;
+  speed: number;
+  direction: 'north' | 'south' | 'east' | 'west';
+  axis: 'x' | 'z';
+  minBound: number;
+  maxBound: number;
+}
+
+const trafficVehicles: TrafficVehicle[] = [];
+
+// A. Parked Vehicles along Main Avenue & Cross Streets (Danfos, Sedans, Kekes)
+interface ParkedSpot {
+  x: number;
+  z: number;
+  yaw: number;
+  type: VehicleType;
+  color?: number;
+}
+
+const parkedSpots: ParkedSpot[] = [
+  // West curbs of Main Avenue (parallel parked)
+  { x: -7.5, z: 35, yaw: 0, type: 'danfo', color: 0xf7bf1f },
+  { x: -7.5, z: 55, yaw: 0, type: 'sedan', color: 0x2c3e50 },
+  { x: -7.5, z: -35, yaw: 0, type: 'keke', color: 0xf7bf1f },
+  { x: -7.5, z: -55, yaw: 0, type: 'sedan', color: 0x95a5a6 },
+  { x: -7.5, z: -110, yaw: 0, type: 'danfo', color: 0xf7bf1f },
+
+  // East curbs of Main Avenue
+  { x: 7.5, z: 40, yaw: Math.PI, type: 'sedan', color: 0xb5502d },
+  { x: 7.5, z: -40, yaw: Math.PI, type: 'danfo', color: 0xf7bf1f },
+  { x: 7.5, z: -105, yaw: Math.PI, type: 'keke', color: 0xf7bf1f },
+
+  // Parked along Connecting Cross Streets (Z = 0, Z = -80, Z = 80)
+  { x: 35, z: 5.5, yaw: Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
+  { x: -35, z: -5.5, yaw: -Math.PI / 2, type: 'sedan', color: 0x16a085 },
+  { x: 50, z: -74.5, yaw: Math.PI / 2, type: 'keke', color: 0xf7bf1f },
+  { x: -50, z: -85.5, yaw: -Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
+  { x: 42, z: 85.5, yaw: Math.PI / 2, type: 'sedan', color: 0xd35400 },
+];
+
+parkedSpots.forEach((spot) => {
+  const mesh = createVehicle({ type: spot.type, primaryColor: spot.color });
+  mesh.position.set(spot.x, 0, spot.z);
+  mesh.rotation.y = spot.yaw;
+  scene.add(mesh);
+});
+
+// B. Moving Vehicles (Many vehicles cruising along Main Avenue and Connecting Cross Streets)
+interface MovingConfig {
+  type: VehicleType;
+  color?: number;
+  x: number;
+  z: number;
+  speed: number;
+  direction: 'north' | 'south' | 'east' | 'west';
+}
+
+const movingConfigs: MovingConfig[] = [
+  // Main Avenue Northbound lane (X = 3.5m, moving towards -Z)
+  { type: 'danfo', color: 0xf7bf1f, x: 3.5, z: 70, speed: 14, direction: 'north' },
+  { type: 'sedan', color: 0x2980b9, x: 3.5, z: 120, speed: 18, direction: 'north' },
+  { type: 'keke',  color: 0xf7bf1f, x: 4.2, z: -20, speed: 10, direction: 'north' },
+  { type: 'danfo', color: 0xf7bf1f, x: 3.5, z: -100, speed: 15, direction: 'north' },
+  { type: 'sedan', color: 0xe74c3c, x: 3.5, z: -150, speed: 20, direction: 'north' },
+
+  // Main Avenue Southbound lane (X = -3.5m, moving towards +Z)
+  { type: 'danfo', color: 0xf7bf1f, x: -3.5, z: -120, speed: 14, direction: 'south' },
+  { type: 'sedan', color: 0x8e44ad, x: -3.5, z: -50, speed: 17, direction: 'south' },
+  { type: 'keke',  color: 0xf7bf1f, x: -4.2, z: 15, speed: 11, direction: 'south' },
+  { type: 'danfo', color: 0xf7bf1f, x: -3.5, z: 90, speed: 15, direction: 'south' },
+  { type: 'sedan', color: 0x27ae60, x: -3.5, z: 140, speed: 19, direction: 'south' },
+
+  // Connecting Street at Z = 0 (Eastbound & Westbound)
+  { type: 'danfo', color: 0xf7bf1f, x: -90, z: -2.8, speed: 13, direction: 'east' },
+  { type: 'sedan', color: 0xf39c12, x: -30, z: -2.8, speed: 16, direction: 'east' },
+  { type: 'keke',  color: 0xf7bf1f, x: 80, z: 2.8, speed: 10, direction: 'west' },
+  { type: 'danfo', color: 0xf7bf1f, x: 30, z: 2.8, speed: 14, direction: 'west' },
+
+  // Connecting Street at Z = -80 (Eastbound & Westbound)
+  { type: 'sedan', color: 0x34495e, x: -70, z: -82.8, speed: 15, direction: 'east' },
+  { type: 'danfo', color: 0xf7bf1f, x: 60, z: -77.2, speed: 13, direction: 'west' },
+
+  // Connecting Street at Z = 80 (Eastbound & Westbound)
+  { type: 'keke',  color: 0xf7bf1f, x: -60, z: 77.2, speed: 11, direction: 'east' },
+  { type: 'sedan', color: 0x1abc9c, x: 70, z: 82.8, speed: 17, direction: 'west' }
+];
+
+movingConfigs.forEach((cfg) => {
+  const mesh = createVehicle({ type: cfg.type, primaryColor: cfg.color });
+  mesh.position.set(cfg.x, 0, cfg.z);
+
+  let axis: 'x' | 'z' = 'z';
+  let minBound = -180;
+  let maxBound = 180;
+
+  if (cfg.direction === 'north') {
+    mesh.rotation.y = Math.PI; // Heading -Z
+    axis = 'z';
+  } else if (cfg.direction === 'south') {
+    mesh.rotation.y = 0; // Heading +Z
+    axis = 'z';
+  } else if (cfg.direction === 'east') {
+    mesh.rotation.y = Math.PI / 2; // Heading +X
+    axis = 'x';
+    minBound = -140;
+    maxBound = 140;
+  } else if (cfg.direction === 'west') {
+    mesh.rotation.y = -Math.PI / 2; // Heading -X
+    axis = 'x';
+    minBound = -140;
+    maxBound = 140;
+  }
+
+  scene.add(mesh);
+  trafficVehicles.push({
+    mesh,
+    speed: cfg.speed,
+    direction: cfg.direction,
+    axis,
+    minBound,
+    maxBound
+  });
+});
+
 // 5. 3D Person Character (Generated from start.ng character style)
 let currentUser: StartNgUser = {
   id: 1,
@@ -305,6 +432,35 @@ function animate() {
   );
   camera.position.lerp(targetCamPos, 0.12);
   camera.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+
+  // Update Traffic Vehicles
+  for (const v of trafficVehicles) {
+    if (v.axis === 'z') {
+      if (v.direction === 'north') {
+        v.mesh.position.z -= v.speed * dt;
+        if (v.mesh.position.z < v.minBound) {
+          v.mesh.position.z = v.maxBound;
+        }
+      } else {
+        v.mesh.position.z += v.speed * dt;
+        if (v.mesh.position.z > v.maxBound) {
+          v.mesh.position.z = v.minBound;
+        }
+      }
+    } else {
+      if (v.direction === 'east') {
+        v.mesh.position.x += v.speed * dt;
+        if (v.mesh.position.x > v.maxBound) {
+          v.mesh.position.x = v.minBound;
+        }
+      } else {
+        v.mesh.position.x -= v.speed * dt;
+        if (v.mesh.position.x < v.minBound) {
+          v.mesh.position.x = v.maxBound;
+        }
+      }
+    }
+  }
 
   renderer.render(scene, camera);
 }
