@@ -511,6 +511,9 @@ for (let pIdx = 0; pIdx < 12; pIdx++) {
 // Buildings flanking the connecting cross streets
 crossStreetZs.forEach((cz) => {
   for (let xStep of [26, 42, 58, -26, -42, -58]) {
+    // Reserve (xStep = 26, cz = 0, north side: cz + 15) for Eko General Hospital
+    if (cz === 0 && xStep === 26) continue;
+
     const h = 10 + (Math.abs(xStep) * 3) % 18;
     const w = 12;
     const d = 10;
@@ -534,6 +537,121 @@ crossStreetZs.forEach((cz) => {
     registerObstacle(xStep, cz - 15, w, d);
   }
 });
+
+// EKO GENERAL HOSPITAL (Emergency Respawn Facility)
+// Located at Broad Street Corner: X = 26, Z = 15
+const hospitalGroup = new THREE.Group();
+const hospW = 14;
+const hospH = 12;
+const hospD = 12;
+
+// Main hospital whitewashed / modern clinic building
+const hospBody = new THREE.Mesh(
+  buildingGeo,
+  new THREE.MeshStandardMaterial({ color: 0xe8edf0, roughness: 0.5, metalness: 0.1 })
+);
+hospBody.scale.set(hospW, hospH, hospD);
+hospBody.position.set(26, hospH / 2, 15);
+hospBody.castShadow = true;
+hospBody.receiveShadow = true;
+hospitalGroup.add(hospBody);
+registerObstacle(26, 15, hospW, hospD);
+
+// Hospital blue accent glass facade
+const hospGlass = new THREE.Mesh(
+  new THREE.PlaneGeometry(10, 6),
+  new THREE.MeshStandardMaterial({ color: 0x1b74e4, roughness: 0.1, metalness: 0.9 })
+);
+hospGlass.position.set(26, 6.5, 8.95);
+hospitalGroup.add(hospGlass);
+
+// Emergency Entrance Overhang Canopy
+const canopyRoof = new THREE.Mesh(
+  new THREE.BoxGeometry(6.4, 0.35, 3.2),
+  new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5 })
+);
+canopyRoof.position.set(26, 3.8, 7.4);
+canopyRoof.castShadow = true;
+hospitalGroup.add(canopyRoof);
+
+// Canopy support pillars
+for (let px of [23.2, 28.8]) {
+  const pCol = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 3.8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2c3e50 })
+  );
+  pCol.position.set(px, 1.9, 6.0);
+  pCol.castShadow = true;
+  hospitalGroup.add(pCol);
+  registerObstacle(px, 6.0, 0.4, 0.4);
+}
+
+// Glowing Red Cross Emblem above Emergency entrance
+const redCrossMat = new THREE.MeshStandardMaterial({
+  color: 0xff0000,
+  emissive: 0xff1111,
+  emissiveIntensity: 2.5
+});
+const crossBarV = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.8, 0.15), redCrossMat);
+crossBarV.position.set(26, 4.8, 8.9);
+hospitalGroup.add(crossBarV);
+
+const crossBarH = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.15), redCrossMat);
+crossBarH.position.set(26, 4.8, 8.9);
+hospitalGroup.add(crossBarH);
+
+// Hospital Signboard: "EKO GENERAL HOSPITAL - EMERGENCY"
+const hospSign = new THREE.Mesh(
+  new THREE.BoxGeometry(7.2, 0.8, 0.15),
+  new THREE.MeshStandardMaterial({ color: 0x0984e3, roughness: 0.4 })
+);
+hospSign.position.set(26, 4.2, 7.35);
+hospitalGroup.add(hospSign);
+
+// Sliding Emergency Automatic Doors (Ground floor entrance)
+const hospDoorMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, roughness: 0.3, metalness: 0.8 });
+const hospDoorL = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.6), hospDoorMat);
+hospDoorL.position.set(25.1, 1.3, 8.95);
+hospitalGroup.add(hospDoorL);
+
+const hospDoorR = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.6), hospDoorMat);
+hospDoorR.position.set(26.9, 1.3, 8.95);
+hospitalGroup.add(hospDoorR);
+
+// Parked Emergency Ambulance beside entrance
+const ambulanceGroup = new THREE.Group();
+ambulanceGroup.position.set(20.5, 0, 6.8);
+ambulanceGroup.rotation.y = Math.PI / 2;
+
+// Ambulance Van Body (White with red stripes)
+const ambBody = new THREE.Mesh(
+  new THREE.BoxGeometry(2.2, 1.8, 4.6),
+  new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+);
+ambBody.position.y = 1.1;
+ambBody.castShadow = true;
+ambulanceGroup.add(ambBody);
+
+// Red reflective side stripe
+const ambStripe = new THREE.Mesh(
+  new THREE.BoxGeometry(2.24, 0.35, 4.4),
+  new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.4 })
+);
+ambStripe.position.y = 1.1;
+ambulanceGroup.add(ambStripe);
+
+// Flashing Emergency Siren Bar on roof
+const sirenBar = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2, 0.2, 0.4),
+  new THREE.MeshStandardMaterial({ color: 0x3498db, emissive: 0x0984e3, emissiveIntensity: 2.0 })
+);
+sirenBar.position.set(0, 2.1, 0.8);
+ambulanceGroup.add(sirenBar);
+
+hospitalGroup.add(ambulanceGroup);
+registerObstacle(20.5, 6.8, 4.6, 2.2);
+
+scene.add(hospitalGroup);
 
 // 5. Vehicles (Parked along curbs + Many in active motion with collision avoidance)
 interface TrafficVehicle {
@@ -1097,12 +1215,24 @@ function respawnPlayer() {
   deathVelocity.set(0, 0, 0);
   playerGroup.rotation.x = 0;
   playerGroup.rotation.z = 0;
-  // Respawn safely on the curb sidewalk
-  playerPos.set(11.2, 0.05, 16);
-  playerYaw = Math.PI;
+
+  // Step out directly from the sliding Emergency doors of Eko General Hospital
+  // Hospital entrance is at X = 26, Z = 8.95; player walks out facing forward towards the street (-Z)
+  playerPos.set(26.0, 0.05, 8.2);
+  playerYaw = Math.PI; // Looking outward from hospital towards cross street & ambulance
+  cameraYaw = Math.PI; // Face camera looking forward down the hospital walkway
 
   if (wastedScreenEl) {
     wastedScreenEl.style.display = 'none';
+  }
+
+  // Display Hospital Discharge Notification
+  if (toastEl) {
+    toastEl.textContent = `🏥 DISCHARGED FROM EKO GENERAL HOSPITAL — BACK TO THE HUSTLE!`;
+    toastEl.style.display = 'block';
+    setTimeout(() => {
+      toastEl.style.display = 'none';
+    }, 3200);
   }
 }
 
