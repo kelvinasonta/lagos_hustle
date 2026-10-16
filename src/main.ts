@@ -32,16 +32,39 @@ sunLight.shadow.mapSize.width = 1024;
 sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
-// 3. Road Network: Main Avenue + Connecting Cross Streets
+// 3. Ground plane & Road Network
+// Laterite soil / urban terrain ground (#B5502D / dark Lagos ground from palette)
+const groundGeo = new THREE.PlaneGeometry(800, 800);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x22201e, roughness: 0.95 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.02;
+ground.receiveShadow = true;
+scene.add(ground);
+
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x2e2e38, roughness: 0.8 });
+const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x9e9a93, roughness: 0.85 }); // Concrete curbs
 const lineMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f }); // Danfo Yellow
-const zebraMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee }); // Pedestrian crosswalk
+const zebraMat = new THREE.MeshBasicMaterial({ color: 0xf5f5f5 }); // Pedestrian crosswalk
 
 // Main Avenue (Z-axis, width 20m, length 400m)
 const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 400), roadMat);
 mainRoad.rotation.x = -Math.PI / 2;
 mainRoad.receiveShadow = true;
 scene.add(mainRoad);
+
+// Sidewalks along Main Avenue (West and East curbs)
+const sidewalkWest = new THREE.Mesh(new THREE.PlaneGeometry(4, 400), sidewalkMat);
+sidewalkWest.rotation.x = -Math.PI / 2;
+sidewalkWest.position.set(-12, 0.04, 0);
+sidewalkWest.receiveShadow = true;
+scene.add(sidewalkWest);
+
+const sidewalkEast = new THREE.Mesh(new THREE.PlaneGeometry(4, 400), sidewalkMat);
+sidewalkEast.rotation.x = -Math.PI / 2;
+sidewalkEast.position.set(12, 0.04, 0);
+sidewalkEast.receiveShadow = true;
+scene.add(sidewalkEast);
 
 // Main road yellow centerline
 const mainCenterLine = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 400), lineMat);
@@ -208,8 +231,8 @@ const keys: Record<string, boolean> = {};
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-let playerPos = new THREE.Vector3(0, 0, 0);
-let playerYaw = 0;
+let playerPos = new THREE.Vector3(0, 0, 20);
+let playerYaw = Math.PI; // Face forward down the street toward the intersection
 const moveSpeed = 8.0;
 
 // Resize handler
