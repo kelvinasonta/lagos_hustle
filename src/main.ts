@@ -525,10 +525,56 @@ const keys: Record<string, boolean> = {};
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-// Start safely on the East sidewalk (X = 11.2, Y = 0.05 on the curb, Z = 16)
+// Player life state & position
 let playerPos = new THREE.Vector3(11.2, 0.05, 16);
 let playerYaw = Math.PI; // Looking down the bustling avenue sidewalk
 const moveSpeed = 7.0;
+
+let isDead = false;
+let deathTimer = 0;
+let deathVelocity = new THREE.Vector3();
+const wastedScreenEl = document.getElementById('wasted-screen')!;
+
+function killPlayer(hitCar: TrafficVehicle) {
+  if (isDead) return;
+  isDead = true;
+  deathTimer = 2.5; // 2.5s respawn sequence
+
+  // Calculate knockback impulse from hit car
+  const carForward = new THREE.Vector3(0, 0, 0);
+  if (hitCar.axis === 'z') {
+    carForward.z = hitCar.direction === 'north' ? -1 : 1;
+  } else {
+    carForward.x = hitCar.direction === 'east' ? 1 : -1;
+  }
+
+  deathVelocity.copy(carForward).multiplyScalar(hitCar.currentSpeed * 0.9);
+  deathVelocity.y = 4.5; // Pop up into air
+
+  // Rotate player mesh backwards (knockdown)
+  playerGroup.rotation.x = -Math.PI / 2;
+
+  // Show WASTED overlay
+  if (wastedScreenEl) {
+    wastedScreenEl.style.display = 'flex';
+    wastedScreenEl.style.opacity = '1';
+  }
+}
+
+function respawnPlayer() {
+  isDead = false;
+  deathTimer = 0;
+  deathVelocity.set(0, 0, 0);
+  playerGroup.rotation.x = 0;
+  playerGroup.rotation.z = 0;
+  // Respawn safely on the curb sidewalk
+  playerPos.set(11.2, 0.05, 16);
+  playerYaw = Math.PI;
+
+  if (wastedScreenEl) {
+    wastedScreenEl.style.display = 'none';
+  }
+}
 
 // Resize handler
 window.addEventListener('resize', () => {
@@ -557,43 +603,60 @@ function animate() {
     fpsTimer = now;
   }
 
-  // Walking Movement (W A S D)
-  let moveX = 0;
-  let moveZ = 0;
-  if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
-  if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
-  if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
-  if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+  // Walking Movement (W A S D) or Death ragdoll
+  if (isDead) {
+    deathTimer -= dt;
+    // Apply gravity and drag to knocked-back player
+    deathVelocity.y -= 15.0 * dt;
+    playerPos.x += deathVelocity.x * dt;
+    playerPos.y = Math.max(0.1, playerPos.y + deathVelocity.y * dt);
+    playerPos.z += deathVelocity.z * dt;
+    deathVelocity.x *= 0.96;
+    deathVelocity.z *= 0.96;
 
-  const isMoving = moveX !== 0 || moveZ !== 0;
-
-  if (isMoving) {
-    const inputAngle = Math.atan2(moveX, moveZ);
-    playerYaw = inputAngle + Math.PI;
-
-    const norm = Math.hypot(moveX, moveZ);
-    playerPos.x += (moveX / norm) * moveSpeed * dt;
-    playerPos.z += (moveZ / norm) * moveSpeed * dt;
-
-    // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
-    const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
-    if (!onCrossStreet) {
-      playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
-    } else {
-      playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
+    if (deathTimer <= 0) {
+      respawnPlayer();
     }
-    playerPos.z = Math.max(-180.0, Math.min(180.0, playerPos.z));
+  } else {
+    let moveX = 0;
+    let moveZ = 0;
+    if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
+    if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
+    if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
 
-    // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
-    const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
-    playerPos.y = onSidewalk ? 0.05 : 0.0;
+    const isMoving = moveX !== 0 || moveZ !== 0;
+
+    if (isMoving) {
+      const inputAngle = Math.atan2(moveX, moveZ);
+      playerYaw = inputAngle + Math.PI;
+
+      const norm = Math.hypot(moveX, moveZ);
+      playerPos.x += (moveX / norm) * moveSpeed * dt;
+      playerPos.z += (moveZ / norm) * moveSpeed * dt;
+
+      // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
+      const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
+      if (!onCrossStreet) {
+        playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
+      } else {
+        playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
+      }
+      playerPos.z = Math.max(-180.0, Math.min(180.0, playerPos.z));
+
+      // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
+      const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
+      playerPos.y = onSidewalk ? 0.05 : 0.0;
+    }
+
+    if (avatar) {
+      avatar.updateAnimation(dt, isMoving, 1.2);
+    }
   }
 
   playerGroup.position.copy(playerPos);
-  playerGroup.rotation.y = playerYaw;
-
-  if (avatar) {
-    avatar.updateAnimation(dt, isMoving, 1.2);
+  if (!isDead) {
+    playerGroup.rotation.y = playerYaw;
   }
 
   // Smooth Third-person chase camera follow relative to player's position
@@ -604,6 +667,22 @@ function animate() {
   );
   camera.position.lerp(targetCamPos, 0.12);
   camera.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+
+  // Check Hit Collision between Player and Moving Cars
+  if (!isDead) {
+    for (const v of trafficVehicles) {
+      const dx = Math.abs(playerPos.x - v.mesh.position.x);
+      const dz = Math.abs(playerPos.z - v.mesh.position.z);
+
+      const hitWidth = v.axis === 'z' ? 1.4 : v.length / 2;
+      const hitLength = v.axis === 'z' ? v.length / 2 : 1.4;
+
+      if (dx < hitWidth && dz < hitLength && v.currentSpeed > 2.0) {
+        killPlayer(v);
+        break;
+      }
+    }
+  }
 
   // Update Traffic Vehicles with Intelligent Collision Avoidance
   const SAFE_FOLLOW_DISTANCE = 16.0; // Minimum gap before slowing down
