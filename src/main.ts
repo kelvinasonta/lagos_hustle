@@ -2,16 +2,16 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { askStartNg, redirectToSignIn, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
 import { AvatarGenerator } from './character/AvatarGenerator';
-import { createDanfoBus } from './vehicles/DanfoGenerator';
+import { createPortHarcourtBus } from './vehicles/DanfoGenerator';
 
 async function initGame() {
   const container = document.getElementById('canvas-container')!;
   const statsEl = document.getElementById('spike-stats')!;
 
-  // 1. Scene & Atmosphere (Warm Lagos Golden Hour)
+  // 1. Scene & Atmosphere (Port Harcourt Niger Delta Sky - Warm Lush Sunlight with Humid Haze)
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#e08a4a');
-  scene.fog = new THREE.FogExp2('#d35400', 0.008);
+  scene.background = new THREE.Color('#d38e55');
+  scene.fog = new THREE.FogExp2('#b86b35', 0.007);
 
   const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 5, 10);
@@ -20,146 +20,183 @@ async function initGame() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
   // Lighting
-  const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x3d3830, 1.4);
+  const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x2c3e50, 1.4);
   scene.add(hemiLight);
 
-  const sunLight = new THREE.DirectionalLight(0xffaa55, 3.0);
-  sunLight.position.set(60, 50, 40);
+  const sunLight = new THREE.DirectionalLight(0xffa834, 3.2);
+  sunLight.position.set(50, 60, 40);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
   sunLight.shadow.camera.near = 0.5;
   sunLight.shadow.camera.far = 250;
-  sunLight.shadow.camera.left = -40;
-  sunLight.shadow.camera.right = 40;
-  sunLight.shadow.camera.top = 40;
-  sunLight.shadow.camera.bottom = -40;
+  sunLight.shadow.camera.left = -50;
+  sunLight.shadow.camera.right = 50;
+  sunLight.shadow.camera.top = 50;
+  sunLight.shadow.camera.bottom = -50;
   scene.add(sunLight);
 
-  // 2. City Ground & Victoria Island Road
+  // 2. Port Harcourt Aba Road Expressway & Flyover Structure
   const roadGroup = new THREE.Group();
   scene.add(roadGroup);
 
-  // Main 4-lane highway asphalt
-  const roadGeo = new THREE.PlaneGeometry(30, 400);
-  const roadMat = new THREE.MeshStandardMaterial({ color: 0x222428, roughness: 0.85 });
+  // Main Expressway Asphalt (Aba Road / Garrison / Rumuokoro corridor)
+  const roadGeo = new THREE.PlaneGeometry(32, 400);
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.85 });
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   road.receiveShadow = true;
   roadGroup.add(road);
 
-  // Road markings (yellow central line & white lane dividers)
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xfbc531 });
-  const centerLine = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 400), lineMat);
-  centerLine.rotation.x = -Math.PI / 2;
-  centerLine.position.y = 0.01;
-  roadGroup.add(centerLine);
+  // Concrete Road Median (Signature Port Harcourt painted kerb: Green & White or Yellow)
+  const medianMat = new THREE.MeshStandardMaterial({ color: 0x2ed573, roughness: 0.7 });
+  const median = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.35, 400), medianMat);
+  median.position.set(0, 0.17, 0);
+  median.castShadow = true;
+  median.receiveShadow = true;
+  roadGroup.add(median);
 
+  // White lane dashes
   const dashMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   for (let z = -190; z <= 190; z += 12) {
-    const dashL = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 5), dashMat);
+    const dashL = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 5), dashMat);
     dashL.rotation.x = -Math.PI / 2;
-    dashL.position.set(-6, 0.01, z);
+    dashL.position.set(-7.5, 0.01, z);
     roadGroup.add(dashL);
 
-    const dashR = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 5), dashMat);
+    const dashR = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 5), dashMat);
     dashR.rotation.x = -Math.PI / 2;
-    dashR.position.set(6, 0.01, z);
+    dashR.position.set(7.5, 0.01, z);
     roadGroup.add(dashR);
   }
 
-  // Sidewalks & Kerbs
-  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x8395a7, roughness: 0.9 });
+  // Sidewalks & Drains
+  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x718093, roughness: 0.9 });
   const sidewalkL = new THREE.Mesh(new THREE.BoxGeometry(10, 0.3, 400), sidewalkMat);
-  sidewalkL.position.set(-20, 0.15, 0);
+  sidewalkL.position.set(-21, 0.15, 0);
   sidewalkL.receiveShadow = true;
   roadGroup.add(sidewalkL);
 
   const sidewalkR = sidewalkL.clone();
-  sidewalkR.position.x = 20;
+  sidewalkR.position.x = 21;
   roadGroup.add(sidewalkR);
 
-  // Lagos Palms & Streetlights along highway
-  const palmGeo = new THREE.CylinderGeometry(0.2, 0.3, 7, 8);
-  const palmTrunkMat = new THREE.MeshStandardMaterial({ color: 0x574b32 });
-  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x10ac84, roughness: 0.6 });
+  // Iconic Port Harcourt Flyover Overpass Bridge (Garrison / Rumuola / Waterlines style)
+  const flyoverGroup = new THREE.Group();
+  flyoverGroup.position.set(0, 0, 70);
 
-  for (let z = -180; z <= 180; z += 35) {
-    const palm = new THREE.Group();
-    palm.position.set(-18, 0, z);
+  // Bridge deck
+  const deckMat = new THREE.MeshStandardMaterial({ color: 0x57606f, roughness: 0.7 });
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(40, 1.2, 14), deckMat);
+  deck.position.set(0, 8.5, 0);
+  deck.castShadow = true;
+  flyoverGroup.add(deck);
 
-    const trunk = new THREE.Mesh(palmGeo, palmTrunkMat);
-    trunk.position.y = 3.5;
+  // Bridge barriers
+  const barrierMat = new THREE.MeshStandardMaterial({ color: 0x2ed573, roughness: 0.6 });
+  const barrierFront = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 0.3), barrierMat);
+  barrierFront.position.set(0, 9.4, 6.8);
+  flyoverGroup.add(barrierFront);
+
+  const barrierBack = barrierFront.clone();
+  barrierBack.position.z = -6.8;
+  flyoverGroup.add(barrierBack);
+
+  // Bridge Pillars
+  const pillarGeo = new THREE.CylinderGeometry(1.2, 1.4, 8.5, 16);
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x747d8c, roughness: 0.8 });
+  const pillarL = new THREE.Mesh(pillarGeo, pillarMat);
+  pillarL.position.set(-10, 4.25, 0);
+  pillarL.castShadow = true;
+  flyoverGroup.add(pillarL);
+
+  const pillarR = pillarL.clone();
+  pillarR.position.x = 10;
+  flyoverGroup.add(pillarR);
+
+  scene.add(flyoverGroup);
+
+  // Tropical Rain-Forest Greenery & Palms (Garden City Flora)
+  const palmGeo = new THREE.CylinderGeometry(0.2, 0.35, 7.5, 8);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4b382a });
+  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x10ac84, roughness: 0.6 });
+
+  for (let z = -180; z <= 180; z += 30) {
+    if (Math.abs(z - 70) < 18) continue; // Skip under flyover
+    const tree = new THREE.Group();
+    tree.position.set(-18, 0, z);
+
+    const trunk = new THREE.Mesh(palmGeo, trunkMat);
+    trunk.position.y = 3.75;
     trunk.castShadow = true;
-    palm.add(trunk);
+    tree.add(trunk);
 
-    const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.4, 8, 8), leavesMat);
-    foliage.scale.set(1.5, 0.6, 1.5);
-    foliage.position.y = 7.0;
+    const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.6, 8, 8), foliageMat);
+    foliage.scale.set(1.4, 0.8, 1.4);
+    foliage.position.y = 7.5;
     foliage.castShadow = true;
-    palm.add(foliage);
+    tree.add(foliage);
 
-    scene.add(palm);
+    scene.add(tree);
 
-    // Streetlight on opposite side
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 8, 8), new THREE.MeshStandardMaterial({ color: 0x2f3640, metalness: 0.8 }));
-    pole.position.set(16, 4, z);
+    // Modern Double-Arm LED Streetlight on East side
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 8.5, 8), new THREE.MeshStandardMaterial({ color: 0x2f3640, metalness: 0.8 }));
+    pole.position.set(17, 4.25, z);
     pole.castShadow = true;
     scene.add(pole);
 
-    const lampArm = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x2f3640 }));
-    lampArm.position.set(15, 8, z);
+    const lampArm = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x2f3640 }));
+    lampArm.position.set(16, 8.5, z);
     scene.add(lampArm);
   }
 
-  // Surrounding Lagos Skyline buildings
+  // Surrounding Port Harcourt Urban Buildings & Oil Hub Corporate Plazas
   for (let i = 0; i < 24; i++) {
-    const h = 25 + Math.random() * 50;
-    const w = 15 + Math.random() * 15;
-    const d = 15 + Math.random() * 20;
+    const h = 20 + Math.random() * 45;
+    const w = 16 + Math.random() * 16;
+    const d = 16 + Math.random() * 20;
     const buildingMat = new THREE.MeshStandardMaterial({
-      color: i % 3 === 0 ? 0x2c3e50 : i % 2 === 0 ? 0x7f8c8d : 0xbdc3c7,
-      roughness: 0.4,
-      metalness: 0.3
+      color: i % 3 === 0 ? 0x34495e : i % 2 === 0 ? 0x95a5a6 : 0xdfe4ea,
+      roughness: 0.45,
+      metalness: 0.25
     });
     const bMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMat);
     const side = i % 2 === 0 ? -1 : 1;
-    bMesh.position.set(side * (40 + Math.random() * 30), h / 2, (i - 12) * 25);
+    bMesh.position.set(side * (42 + Math.random() * 25), h / 2, (i - 12) * 26);
     bMesh.castShadow = true;
     bMesh.receiveShadow = true;
     scene.add(bMesh);
   }
 
-  // 3. Lagos Yellow Danfo Bus
-  const danfo = createDanfoBus();
-  danfo.position.set(4, 0, -8);
-  scene.add(danfo);
+  // 3. Port Harcourt Blue & White Commercial Bus
+  const phcBus = createPortHarcourtBus();
+  phcBus.position.set(4, 0, -8);
+  scene.add(phcBus);
 
   // 4. Rapier Physics Engine
   await RAPIER.init();
   const gravity = { x: 0, y: -9.81, z: 0 };
   const world = new RAPIER.World(gravity);
 
-  // Static ground collider
   const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0);
   const groundBody = world.createRigidBody(groundBodyDesc);
   world.createCollider(RAPIER.ColliderDesc.cuboid(150, 0.1, 200), groundBody);
 
-  // 5. start.ng Player Avatar & Character Generator
+  // 5. start.ng Player Character (PH Pitakwa Driver style)
   let currentUser: StartNgUser = {
     id: 1,
-    name: 'Kelvin',
-    account: 'kelvin',
+    name: 'Kelvin PH',
+    account: 'pitakwa_boy',
     style: {
       body: 'male',
-      primaryColor: '#fbc531', // Yellow top
-      secondaryColor: '#2f3640', // Dark jeans
+      primaryColor: '#0984e3', // PH Blue top
+      secondaryColor: '#2d3436', // Dark jeans
       skinColor: '#8d5524',
       hairColor: '#1e272e',
       hair: 'short',
@@ -184,7 +221,7 @@ async function initGame() {
 
   rebuildAvatar(currentUser);
 
-  // start.ng Identity Hookup
+  // Identity Hookup
   const cardEl = document.getElementById('player-card')!;
   const faceEl = document.getElementById('player-face') as HTMLImageElement;
   const nameEl = document.getElementById('player-name')!;
@@ -204,7 +241,7 @@ async function initGame() {
         rebuildAvatar(p);
         faceEl.src = p.face;
         nameEl.textContent = p.name;
-        accountEl.textContent = reply.user?.account ? `@${reply.user.account}` : 'Guest Driver';
+        accountEl.textContent = reply.user?.account ? `@${reply.user.account}` : 'PH Resident';
         signinBtn.style.display = reply.user ? 'none' : 'inline-block';
         cardEl.style.display = 'flex';
       }
@@ -250,7 +287,7 @@ async function initGame() {
 
     world.step();
 
-    // Movement logic (WASD / Arrows)
+    // Movement (WASD / Arrows)
     let moveX = 0;
     let moveZ = 0;
     if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
@@ -268,8 +305,7 @@ async function initGame() {
       playerPos.x += (moveX / norm) * moveSpeed * dt;
       playerPos.z += (moveZ / norm) * moveSpeed * dt;
 
-      // Clamp player within road & sidewalk bounds
-      playerPos.x = Math.max(-24, Math.min(24, playerPos.x));
+      playerPos.x = Math.max(-25, Math.min(25, playerPos.x));
     }
 
     playerGroup.position.copy(playerPos);
@@ -279,7 +315,7 @@ async function initGame() {
       avatar.updateAnimation(dt, isMoving, 1.2);
     }
 
-    // Third-Person Smooth Chase Camera
+    // Third-person Camera Follow
     const targetCamPos = new THREE.Vector3(
       playerPos.x,
       playerPos.y + 4.2,
@@ -292,10 +328,10 @@ async function initGame() {
 
     // Update stats & controls overlay
     statsEl.innerHTML = `
-      <b style="color:#fbc531">EKO STREETS — LIVE GAMEPLAY</b><br/>
-      FPS: <span style="color:#2ed573">${fps}</span> | Player: <b>${currentUser.name}</b> (@${currentUser.account})<br/>
-      Controls: <b>WASD / Arrow Keys</b> to walk & explore Lagos<br/>
-      Location: Victoria Island Highway (Near Danfo Bus)
+      <b style="color:#0984e3">PITAKWA STREETS — PORT HARCOURT LIVE</b><br/>
+      FPS: <span style="color:#2ed573">${fps}</span> | Driver: <b>${currentUser.name}</b> (@${currentUser.account})<br/>
+      Controls: <b>WASD / Arrow Keys</b> to walk & explore Port Harcourt<br/>
+      Location: Aba Road Corridor & Garrison Flyover Overpass
     `;
   }
 
