@@ -1,0 +1,10 @@
+{
+  "leaderboard": {
+    "stats": [
+      { "key": "earnings", "label": "Earnings (₦)", "order": "highest" },
+      { "key": "deliveries", "label": "Deliveries", "order": "highest" },
+      { "key": "distance_km", "label": "Distance (km)", "order": "highest" },
+      { "key": "best_time", "label": "Best Lap", "order": "lowest", "format": "time" }
+    ]
+  }
+}

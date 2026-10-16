@@ -1,0 +1,25 @@
+{
+  "name": "eko-streets",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "pack:assets": "node tools/pack-assets.mjs",
+    "check:budget": "node tools/check-budget.mjs",
+    "build:publish": "npm run build && npm run check:budget"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.174.0",
+    "canvas": "^3.2.3",
+    "sharp": "^0.35.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0"
+  }
+}
