@@ -48,27 +48,27 @@ const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x9e9a93, roughness:
 const lineMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f }); // Danfo Yellow
 const zebraMat = new THREE.MeshBasicMaterial({ color: 0xf5f5f5 }); // Pedestrian crosswalk
 
-// Main Avenue (Z-axis, width 20m, length 400m)
-const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 400), roadMat);
+// Main Avenue (Z-axis, width 20m, length 600m)
+const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 600), roadMat);
 mainRoad.rotation.x = -Math.PI / 2;
 mainRoad.receiveShadow = true;
 scene.add(mainRoad);
 
 // Sidewalks along Main Avenue (West and East curbs)
-const sidewalkWest = new THREE.Mesh(new THREE.PlaneGeometry(4, 400), sidewalkMat);
+const sidewalkWest = new THREE.Mesh(new THREE.PlaneGeometry(4, 600), sidewalkMat);
 sidewalkWest.rotation.x = -Math.PI / 2;
 sidewalkWest.position.set(-12, 0.04, 0);
 sidewalkWest.receiveShadow = true;
 scene.add(sidewalkWest);
 
-const sidewalkEast = new THREE.Mesh(new THREE.PlaneGeometry(4, 400), sidewalkMat);
+const sidewalkEast = new THREE.Mesh(new THREE.PlaneGeometry(4, 600), sidewalkMat);
 sidewalkEast.rotation.x = -Math.PI / 2;
 sidewalkEast.position.set(12, 0.04, 0);
 sidewalkEast.receiveShadow = true;
 scene.add(sidewalkEast);
 
 // Main road yellow centerline
-const mainCenterLine = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 400), lineMat);
+const mainCenterLine = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 600), lineMat);
 mainCenterLine.rotation.x = -Math.PI / 2;
 mainCenterLine.position.y = 0.01;
 scene.add(mainCenterLine);
@@ -92,8 +92,8 @@ function registerObstacle(x: number, z: number, width: number, depth: number) {
   });
 }
 
-// Connecting cross streets (Intersections at Z = -80, Z = 0, Z = 80)
-const crossStreetZs = [-80, 0, 80];
+// Connecting cross streets (5 Intersections across sprawling city: Marina North, Broad St, CMS Central, Ojuelegba, Glover South)
+const crossStreetZs = [-160, -80, 0, 80, 160];
 crossStreetZs.forEach((crossZ) => {
   // Cross street (X-axis, width 16m, length 300m)
   const crossRoad = new THREE.Mesh(new THREE.PlaneGeometry(300, 16), roadMat);
@@ -123,7 +123,7 @@ crossStreetZs.forEach((crossZ) => {
     }
   }
 
-  // Street Name Signs / Boards at Corners (e.g. Marina Rd, Broad St, Ojuelegba Way)
+  // Street Name Signs / Boards at Corners
   const signPole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.08, 4.2, 8),
     new THREE.MeshStandardMaterial({ color: 0x444444 })
@@ -478,12 +478,12 @@ function createDetailedBuilding(x: number, z: number, w: number, h: number, d: n
   registerObstacle(x, z, w, d);
 }
 
-// Generate buildings along Main Avenue (West and East street walls)
-for (let i = 0; i < 28; i++) {
-  const zPos = -130 + i * 10;
+// Generate buildings along Main Avenue (West and East street walls across expanded 600m city)
+for (let i = 0; i < 48; i++) {
+  const zPos = -235 + i * 10;
   if (isNearIntersection(zPos)) continue; // Keep intersection corners open
 
-  const h = 14 + ((i * 13) % 22);
+  const h = 14 + ((i * 13) % 24);
   const w = 11;
   const d = 8.5;
 
@@ -494,8 +494,8 @@ for (let i = 0; i < 28; i++) {
   createDetailedBuilding(18, zPos, w, h, d, 'east');
 }
 
-// Street Light Poles along Sidewalks
-for (let z = -140; z <= 140; z += 24) {
+// Street Light Poles along Sidewalks (spanning entire 600m avenue)
+for (let z = -240; z <= 240; z += 24) {
   for (let xSide of [-10.8, 10.8]) {
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.09, 6.5, 8),
@@ -1402,12 +1402,150 @@ function respawnPlayer() {
   }
 }
 
-// Resize handler
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+// Minimap (EKO GPS Radar) Renderer
+const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement | null;
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+
+function renderMinimap() {
+  if (!minimapCanvas || !minimapCtx) return;
+  const ctx = minimapCtx;
+  const w = minimapCanvas.width;
+  const h = minimapCanvas.height;
+  const cx = w / 2;
+  const cz = h / 2;
+  const scale = 0.55; // 1 meter = 0.55 canvas pixels (shows ~145m radius around player)
+
+  // Clear minimap with dark Lagos radar background
+  ctx.fillStyle = '#0f141a';
+  ctx.fillRect(0, 0, w, h);
+
+  // Radar grid range circles
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cz, 30, 0, Math.PI * 2);
+  ctx.arc(cx, cz, 65, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Helper to project world (wx, wz) to canvas coordinates relative to playerPos
+  function worldToMinimap(wx: number, wz: number): { x: number; y: number } {
+    return {
+      x: cx + (wx - playerPos.x) * scale,
+      y: cz + (wz - playerPos.z) * scale
+    };
+  }
+
+  // 1. Draw Roads
+  // Main Avenue (vertical road)
+  const aveP1 = worldToMinimap(-10, -200);
+  const aveP2 = worldToMinimap(10, 200);
+  ctx.fillStyle = '#2c3e50';
+  ctx.fillRect(aveP1.x, 0, (aveP2.x - aveP1.x), h);
+
+  // Main Avenue Centerline
+  const clP = worldToMinimap(0, 0);
+  ctx.strokeStyle = '#f1c40f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(clP.x, 0);
+  ctx.lineTo(clP.x, h);
+  ctx.stroke();
+
+  // Connecting Cross Streets
+  crossStreetZs.forEach((crossZ) => {
+    const csP = worldToMinimap(-150, crossZ - 8);
+    const csH = 16 * scale;
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(0, csP.y, w, csH);
+
+    // Cross centerline
+    ctx.strokeStyle = '#f1c40f';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, csP.y + csH / 2);
+    ctx.lineTo(w, csP.y + csH / 2);
+    ctx.stroke();
+  });
+
+  // 2. Draw Solid Buildings & Obstacles
+  ctx.fillStyle = 'rgba(99, 110, 114, 0.85)';
+  for (const obs of worldColliders) {
+    const p1 = worldToMinimap(obs.minX, obs.minZ);
+    const p2 = worldToMinimap(obs.maxX, obs.maxZ);
+    const bw = p2.x - p1.x;
+    const bh = p2.y - p1.y;
+    // Only draw if within minimap range
+    if (p1.x + bw > -10 && p1.x < w + 10 && p1.y + bh > -10 && p1.y < h + 10) {
+      ctx.fillRect(p1.x, p1.y, bw, bh);
+    }
+  }
+
+  // Highlight Hospital (Green cross box on map)
+  const hospP = worldToMinimap(26, 15);
+  ctx.fillStyle = '#0984e3';
+  ctx.fillRect(hospP.x - 7 * scale, hospP.y - 6 * scale, 14 * scale, 12 * scale);
+  ctx.fillStyle = '#ff4757';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('+', hospP.x, hospP.y + 3);
+
+  // 3. Draw Moving Traffic Cars
+  for (const v of trafficVehicles) {
+    const vp = worldToMinimap(v.mesh.position.x, v.mesh.position.z);
+    if (vp.x > 0 && vp.x < w && vp.y > 0 && vp.y < h) {
+      ctx.fillStyle = v.direction === 'north' || v.direction === 'south' ? '#f39c12' : '#e74c3c';
+      ctx.beginPath();
+      ctx.arc(vp.x, vp.y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 4. Draw Active Mission Waypoint Marker
+  const currentMission = missions[currentMissionIndex % missions.length];
+  const targetPos = currentStage === 'pickup' ? currentMission.pickupPos : currentMission.dropoffPos;
+  const tp = worldToMinimap(targetPos.x, targetPos.z);
+
+  // If target is off minimap, draw indicator along radar edge
+  const dx = tp.x - cx;
+  const dy = tp.y - cz;
+  const dist = Math.hypot(dx, dy);
+  const maxR = w / 2 - 12;
+
+  let markerX = tp.x;
+  let markerY = tp.y;
+  if (dist > maxR) {
+    markerX = cx + (dx / dist) * maxR;
+    markerY = cz + (dy / dist) * maxR;
+  }
+
+  const markerColor = currentStage === 'pickup' ? '#f7bf1f' : '#2ed573';
+  ctx.fillStyle = markerColor;
+  ctx.beginPath();
+  ctx.arc(markerX, markerY, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 5. Draw Player (Centered with orientation arrow)
+  ctx.save();
+  ctx.translate(cx, cz);
+  ctx.rotate(playerYaw);
+
+  // Player triangle pointer
+  ctx.fillStyle = '#00d2d3';
+  ctx.beginPath();
+  ctx.moveTo(0, 6);
+  ctx.lineTo(-4, -5);
+  ctx.lineTo(4, -5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore();
+}
 
 // 7. Game loop & FPS Counter
 let lastTime = performance.now();
@@ -1519,7 +1657,7 @@ function animate() {
       } else {
         playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
       }
-      playerPos.z = Math.max(-180.0, Math.min(180.0, playerPos.z));
+      playerPos.z = Math.max(-280.0, Math.min(280.0, playerPos.z));
 
       // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
       const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
@@ -1746,7 +1884,9 @@ function animate() {
     triggerStageTransition();
   }
 
+  // Render 3D scene & Real-Time EKO GPS Minimap
   renderer.render(scene, camera);
+  renderMinimap();
 }
 
 animate();
