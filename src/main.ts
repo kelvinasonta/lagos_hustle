@@ -835,8 +835,24 @@ interface TrafficVehicle {
 
 const trafficVehicles: TrafficVehicle[] = [];
 
-// A. Parked Vehicles along Main Avenue & Cross Streets (Danfos, Sedans, Kekes)
+// A. Parked & Ridable Vehicles along Main Avenue & Cross Streets
+interface RidableVehicle {
+  id: number;
+  type: VehicleType;
+  mesh: THREE.Group;
+  pos: THREE.Vector3;
+  yaw: number;
+  speed: number;
+  maxSpeed: number;
+  turnSpeed: number;
+  colliderIndex?: number;
+}
+
+const ridableVehicles: RidableVehicle[] = [];
+
+// Parked spot configs (includes Bicycles, Okada Scooters, Danfo Buses, Sedans, Kekes)
 interface ParkedSpot {
+  id: number;
   x: number;
   z: number;
   yaw: number;
@@ -845,24 +861,33 @@ interface ParkedSpot {
 }
 
 const parkedSpots: ParkedSpot[] = [
+  // Bicycles on Sidewalks / Curbs for immediate dispatch
+  { id: 1, x: 10.8, z: 20, yaw: Math.PI, type: 'bicycle', color: 0x2ed573 },
+  { id: 2, x: -10.8, z: -20, yaw: 0, type: 'bicycle', color: 0x3498db },
+  { id: 3, x: 10.8, z: -70, yaw: Math.PI, type: 'bicycle', color: 0xe67e22 },
+
+  // Dispatch Motor Scooters (Okada with rear parcel boxes)
+  { id: 4, x: -7.6, z: 22, yaw: 0, type: 'scooter', color: 0xe74c3c },
+  { id: 5, x: 7.6, z: -25, yaw: Math.PI, type: 'scooter', color: 0xf39c12 },
+  { id: 6, x: -7.6, z: 95, yaw: 0, type: 'scooter', color: 0x9b59b6 },
+
   // West curbs of Main Avenue (parallel parked)
-  { x: -7.5, z: 35, yaw: 0, type: 'danfo', color: 0xf7bf1f },
-  { x: -7.5, z: 55, yaw: 0, type: 'sedan', color: 0x2c3e50 },
-  { x: -7.5, z: -35, yaw: 0, type: 'keke', color: 0xf7bf1f },
-  { x: -7.5, z: -55, yaw: 0, type: 'sedan', color: 0x95a5a6 },
-  { x: -7.5, z: -110, yaw: 0, type: 'danfo', color: 0xf7bf1f },
+  { id: 7, x: -7.5, z: 45, yaw: 0, type: 'danfo', color: 0xf7bf1f },
+  { id: 8, x: -7.5, z: 70, yaw: 0, type: 'sedan', color: 0x2c3e50 },
+  { id: 9, x: -7.5, z: -45, yaw: 0, type: 'keke', color: 0xf7bf1f },
+  { id: 10, x: -7.5, z: -110, yaw: 0, type: 'danfo', color: 0xf7bf1f },
 
   // East curbs of Main Avenue
-  { x: 7.5, z: 40, yaw: Math.PI, type: 'sedan', color: 0xb5502d },
-  { x: 7.5, z: -40, yaw: Math.PI, type: 'danfo', color: 0xf7bf1f },
-  { x: 7.5, z: -105, yaw: Math.PI, type: 'keke', color: 0xf7bf1f },
+  { id: 11, x: 7.5, z: 50, yaw: Math.PI, type: 'sedan', color: 0xb5502d },
+  { id: 12, x: 7.5, z: -45, yaw: Math.PI, type: 'danfo', color: 0xf7bf1f },
+  { id: 13, x: 7.5, z: -115, yaw: Math.PI, type: 'keke', color: 0xf7bf1f },
 
-  // Parked along Connecting Cross Streets (Z = 0, Z = -80, Z = 80)
-  { x: 35, z: 5.5, yaw: Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
-  { x: -35, z: -5.5, yaw: -Math.PI / 2, type: 'sedan', color: 0x16a085 },
-  { x: 50, z: -74.5, yaw: Math.PI / 2, type: 'keke', color: 0xf7bf1f },
-  { x: -50, z: -85.5, yaw: -Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
-  { x: 42, z: 85.5, yaw: Math.PI / 2, type: 'sedan', color: 0xd35400 },
+  // Parked along Connecting Cross Streets
+  { id: 14, x: 35, z: 5.5, yaw: Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
+  { id: 15, x: -35, z: -5.5, yaw: -Math.PI / 2, type: 'sedan', color: 0x16a085 },
+  { id: 16, x: 50, z: -74.5, yaw: Math.PI / 2, type: 'keke', color: 0xf7bf1f },
+  { id: 17, x: -50, z: -85.5, yaw: -Math.PI / 2, type: 'danfo', color: 0xf7bf1f },
+  { id: 18, x: 42, z: 85.5, yaw: Math.PI / 2, type: 'sedan', color: 0xd35400 },
 ];
 
 parkedSpots.forEach((spot) => {
@@ -871,11 +896,33 @@ parkedSpots.forEach((spot) => {
   mesh.rotation.y = spot.yaw;
   scene.add(mesh);
 
-  const length = spot.type === 'danfo' ? 5.2 : spot.type === 'sedan' ? 4.5 : 2.5;
-  const width = 2.4;
-  // If vehicle is parked perpendicular (along cross streets, yaw approx +/- PI/2)
-  const isPerp = Math.abs(Math.sin(spot.yaw)) > 0.5;
-  registerObstacle(spot.x, spot.z, isPerp ? length : width, isPerp ? width : length);
+  // Determine physical parameters based on ride type
+  let maxSpd = 16.0;
+  let trnSpd = 2.4;
+  if (spot.type === 'bicycle') {
+    maxSpd = 11.0;
+    trnSpd = 3.2;
+  } else if (spot.type === 'scooter') {
+    maxSpd = 18.0;
+    trnSpd = 2.8;
+  } else if (spot.type === 'danfo') {
+    maxSpd = 17.0;
+    trnSpd = 1.8;
+  } else if (spot.type === 'keke') {
+    maxSpd = 13.0;
+    trnSpd = 2.6;
+  }
+
+  ridableVehicles.push({
+    id: spot.id,
+    type: spot.type,
+    mesh,
+    pos: new THREE.Vector3(spot.x, 0, spot.z),
+    yaw: spot.yaw,
+    speed: 0,
+    maxSpeed: maxSpd,
+    turnSpeed: trnSpd
+  });
 });
 
 // B. Moving Vehicles (Organized in distinct lanes with collision avoidance)
@@ -1060,6 +1107,79 @@ window.addEventListener('wheel', (e) => {
 let playerPos = new THREE.Vector3(11.2, 0.05, 16);
 let playerYaw = Math.PI; // Looking down the bustling avenue sidewalk
 const moveSpeed = 7.0;
+
+// Vehicle riding state (Walk, Bicycle, Scooter, Danfo, Keke, Sedan)
+let currentVehicle: RidableVehicle | null = null;
+const vehiclePromptEl = document.getElementById('vehicle-prompt');
+
+// E key listener for Mounting / Dismounting vehicles
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE') {
+    if (currentVehicle) {
+      // Dismount vehicle
+      dismountCurrentVehicle();
+    } else {
+      // Check nearest vehicle within mounting range (3.2m)
+      const nearby = getNearestRidableVehicle(3.2);
+      if (nearby) {
+        mountVehicle(nearby);
+      }
+    }
+  }
+});
+
+function getNearestRidableVehicle(maxDist = 3.2): RidableVehicle | null {
+  let closest: RidableVehicle | null = null;
+  let minD = maxDist;
+  for (const v of ridableVehicles) {
+    const d = playerPos.distanceTo(v.pos);
+    if (d < minD) {
+      minD = d;
+      closest = v;
+    }
+  }
+  return closest;
+}
+
+function mountVehicle(v: RidableVehicle) {
+  currentVehicle = v;
+  // Position player directly on driver/rider seat
+  playerPos.copy(v.pos);
+  playerYaw = v.yaw;
+
+  // Elevate player position slightly to sit/stand properly
+  if (v.type === 'bicycle' || v.type === 'scooter') {
+    playerPos.y = 0.2;
+  } else {
+    playerPos.y = 0.4;
+  }
+
+  const name = v.type === 'bicycle' ? 'DISPATCH BICYCLE' : v.type === 'scooter' ? 'OKADA SCOOTER' : v.type === 'danfo' ? 'DANFO BUS' : v.type === 'keke' ? 'KEKE NAPEP' : 'SEDAN CAR';
+  if (toastEl) {
+    toastEl.textContent = `🚀 MOUNTED ${name}! PRESS [E] TO DISMOUNT`;
+    toastEl.style.display = 'block';
+    setTimeout(() => {
+      toastEl.style.display = 'none';
+    }, 2500);
+  }
+}
+
+function dismountCurrentVehicle() {
+  if (!currentVehicle) return;
+  // Step safely to the side
+  playerPos.x += Math.sin(playerYaw + Math.PI / 2) * 1.5;
+  playerPos.y = 0.05;
+  currentVehicle.speed = 0;
+  currentVehicle = null;
+
+  if (toastEl) {
+    toastEl.textContent = `🚶 DISMOUNTED TO FOOT`;
+    toastEl.style.display = 'block';
+    setTimeout(() => {
+      toastEl.style.display = 'none';
+    }, 1800);
+  }
+}
 
 let isDead = false;
 let deathTimer = 0;
@@ -1354,6 +1474,12 @@ function killPlayer(hitCar: TrafficVehicle) {
   isDead = true;
   deathTimer = 2.5; // 2.5s respawn sequence
 
+  // If riding a bicycle/scooter/danfo, knock player off vehicle
+  if (currentVehicle) {
+    currentVehicle.speed = 0;
+    currentVehicle = null;
+  }
+
   // Calculate knockback impulse from hit car
   const carForward = new THREE.Vector3(0, 0, 0);
   if (hitCar.axis === 'z') {
@@ -1489,7 +1615,19 @@ function renderMinimap() {
   ctx.textAlign = 'center';
   ctx.fillText('+', hospP.x, hospP.y + 3);
 
-  // 3. Draw Moving Traffic Cars
+  // 3. Draw Parked & Ridable Vehicles (Bicycles, Scooters, Danfos)
+  for (const rv of ridableVehicles) {
+    if (currentVehicle && currentVehicle.id === rv.id) continue;
+    const rp = worldToMinimap(rv.pos.x, rv.pos.z);
+    if (rp.x > 0 && rp.x < w && rp.y > 0 && rp.y < h) {
+      ctx.fillStyle = rv.type === 'bicycle' ? '#2ed573' : rv.type === 'scooter' ? '#ff4757' : '#f7bf1f';
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 4. Draw Moving Traffic Cars
   for (const v of trafficVehicles) {
     const vp = worldToMinimap(v.mesh.position.x, v.mesh.position.z);
     if (vp.x > 0 && vp.x < w && vp.y > 0 && vp.y < h) {
@@ -1589,51 +1727,67 @@ function animate() {
     if (keys['KeyQ']) cameraYaw += 1.8 * dt;
     if (keys['KeyE']) cameraYaw -= 1.8 * dt;
 
-    let inputX = 0;
-    let inputZ = 0;
-    if (keys['KeyW'] || keys['ArrowUp']) inputZ -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) inputZ += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) inputX -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) inputX += 1;
+    // Show proximity prompt if near a mountable vehicle while on foot
+    if (!currentVehicle && vehiclePromptEl) {
+      const nearV = getNearestRidableVehicle(3.2);
+      if (nearV) {
+        const vTitle = nearV.type === 'bicycle' ? 'BICYCLE' : nearV.type === 'scooter' ? 'OKADA SCOOTER' : nearV.type === 'danfo' ? 'DANFO BUS' : nearV.type === 'keke' ? 'KEKE' : 'CAR';
+        vehiclePromptEl.textContent = `PRESS [E] TO RIDE ${vTitle}`;
+        vehiclePromptEl.style.display = 'block';
+      } else {
+        vehiclePromptEl.style.display = 'none';
+      }
+    } else if (vehiclePromptEl) {
+      vehiclePromptEl.style.display = 'none';
+    }
 
-    const isMoving = inputX !== 0 || inputZ !== 0;
+    if (currentVehicle) {
+      // VEHICLE DRIVING / CYCLING / SCOOTERING PHYSICS
+      let throttle = 0;
+      let steer = 0;
+      if (keys['KeyW'] || keys['ArrowUp']) throttle += 1;
+      if (keys['KeyS'] || keys['ArrowDown']) throttle -= 0.6; // Reverse / Brake
+      if (keys['KeyA'] || keys['ArrowLeft']) steer += 1;
+      if (keys['KeyD'] || keys['ArrowRight']) steer -= 1;
 
-    if (isMoving) {
-      // Calculate world movement vectors relative to camera view angle
-      const forwardAngle = cameraYaw + Math.PI;
-      const forwardX = Math.sin(forwardAngle);
-      const forwardZ = Math.cos(forwardAngle);
+      // Acceleration & Braking
+      const accelRate = currentVehicle.type === 'bicycle' ? 14.0 : currentVehicle.type === 'scooter' ? 22.0 : 18.0;
+      const friction = 6.0;
 
-      const rightX = -forwardZ;
-      const rightZ = forwardX;
+      if (throttle !== 0) {
+        currentVehicle.speed += throttle * accelRate * dt;
+        currentVehicle.speed = Math.max(-6.0, Math.min(currentVehicle.maxSpeed, currentVehicle.speed));
+      } else {
+        // Natural coasting deceleration
+        if (currentVehicle.speed > 0) {
+          currentVehicle.speed = Math.max(0, currentVehicle.speed - friction * dt);
+        } else if (currentVehicle.speed < 0) {
+          currentVehicle.speed = Math.min(0, currentVehicle.speed + friction * dt);
+        }
+      }
 
-      const norm = Math.hypot(inputX, inputZ);
-      const dirForward = -inputZ / norm; // W is forward
-      const dirRight = inputX / norm;    // D is right
+      // Steering (turns vehicle yaw)
+      if (steer !== 0 && Math.abs(currentVehicle.speed) > 0.1) {
+        const reverseMult = currentVehicle.speed < 0 ? -1 : 1;
+        currentVehicle.yaw += steer * currentVehicle.turnSpeed * dt * reverseMult;
+      }
 
-      const moveX = forwardX * dirForward + rightX * dirRight;
-      const moveZ = forwardZ * dirForward + rightZ * dirRight;
+      // Integrate vehicle position
+      const vx = Math.sin(currentVehicle.yaw) * currentVehicle.speed * dt;
+      const vz = Math.cos(currentVehicle.yaw) * currentVehicle.speed * dt;
 
-      playerYaw = Math.atan2(moveX, moveZ);
+      const nextX = currentVehicle.pos.x + vx;
+      const nextZ = currentVehicle.pos.z + vz;
 
-      const targetDeltaX = moveX * moveSpeed * dt;
-      const targetDeltaZ = moveZ * moveSpeed * dt;
+      const vRadius = currentVehicle.type === 'bicycle' || currentVehicle.type === 'scooter' ? 0.6 : 1.4;
 
-      // Candidate new position
-      let nextX = playerPos.x + targetDeltaX;
-      let nextZ = playerPos.z + targetDeltaZ;
-
-      // Player physical collision radius
-      const PLAYER_RADIUS = 0.45;
-
-      // Helper to check if a circle at (cx, cz) overlaps any registered solid obstacle
-      function collidesWithObstacles(cx: number, cz: number): boolean {
+      function vCollides(cx: number, cz: number): boolean {
         for (const obs of worldColliders) {
           if (
-            cx + PLAYER_RADIUS > obs.minX &&
-            cx - PLAYER_RADIUS < obs.maxX &&
-            cz + PLAYER_RADIUS > obs.minZ &&
-            cz - PLAYER_RADIUS < obs.maxZ
+            cx + vRadius > obs.minX &&
+            cx - vRadius < obs.maxX &&
+            cz + vRadius > obs.minZ &&
+            cz - vRadius < obs.maxZ
           ) {
             return true;
           }
@@ -1641,31 +1795,124 @@ function animate() {
         return false;
       }
 
-      // Check collision on X axis (allows sliding along walls)
-      if (!collidesWithObstacles(nextX, playerPos.z)) {
-        playerPos.x = nextX;
-      }
-      // Check collision on Z axis (allows sliding along walls)
-      if (!collidesWithObstacles(playerPos.x, nextZ)) {
-        playerPos.z = nextZ;
-      }
-
-      // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
-      const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
-      if (!onCrossStreet) {
-        playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
+      if (!vCollides(nextX, currentVehicle.pos.z)) {
+        currentVehicle.pos.x = nextX;
       } else {
-        playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
+        currentVehicle.speed *= 0.3; // Dampen speed on curb impact
       }
-      playerPos.z = Math.max(-280.0, Math.min(280.0, playerPos.z));
+      if (!vCollides(currentVehicle.pos.x, nextZ)) {
+        currentVehicle.pos.z = nextZ;
+      } else {
+        currentVehicle.speed *= 0.3;
+      }
 
-      // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
-      const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
-      playerPos.y = onSidewalk ? 0.05 : 0.0;
-    }
+      // Road boundary limits for vehicles
+      const onCrossStreet = crossStreetZs.some((cz) => Math.abs(currentVehicle!.pos.z - cz) <= 7.0);
+      if (!onCrossStreet) {
+        currentVehicle.pos.x = Math.max(-13.0, Math.min(13.0, currentVehicle.pos.x));
+      } else {
+        currentVehicle.pos.x = Math.max(-140.0, Math.min(140.0, currentVehicle.pos.x));
+      }
+      currentVehicle.pos.z = Math.max(-280.0, Math.min(280.0, currentVehicle.pos.z));
 
-    if (avatar) {
-      avatar.updateAnimation(dt, isMoving, 1.2);
+      // Update 3D mesh position and rotation
+      currentVehicle.mesh.position.copy(currentVehicle.pos);
+      currentVehicle.mesh.rotation.y = currentVehicle.yaw;
+
+      // Sync player on rider seat
+      playerPos.copy(currentVehicle.pos);
+      playerYaw = currentVehicle.yaw;
+
+      if (currentVehicle.type === 'bicycle' || currentVehicle.type === 'scooter') {
+        playerPos.y = 0.25;
+      } else {
+        playerPos.y = 0.45;
+      }
+
+      if (avatar) {
+        const isPedaling = Math.abs(currentVehicle.speed) > 0.5;
+        avatar.updateAnimation(dt, isPedaling, currentVehicle.type === 'bicycle' ? 2.0 : 0.8);
+      }
+    } else {
+      // ON FOOT WALKING MOVEMENT
+      let inputX = 0;
+      let inputZ = 0;
+      if (keys['KeyW'] || keys['ArrowUp']) inputZ -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) inputZ += 1;
+      if (keys['KeyA'] || keys['ArrowLeft']) inputX -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) inputX += 1;
+
+      const isMoving = inputX !== 0 || inputZ !== 0;
+
+      if (isMoving) {
+        // Calculate world movement vectors relative to camera view angle
+        const forwardAngle = cameraYaw + Math.PI;
+        const forwardX = Math.sin(forwardAngle);
+        const forwardZ = Math.cos(forwardAngle);
+
+        const rightX = -forwardZ;
+        const rightZ = forwardX;
+
+        const norm = Math.hypot(inputX, inputZ);
+        const dirForward = -inputZ / norm; // W is forward
+        const dirRight = inputX / norm;    // D is right
+
+        const moveX = forwardX * dirForward + rightX * dirRight;
+        const moveZ = forwardZ * dirForward + rightZ * dirRight;
+
+        playerYaw = Math.atan2(moveX, moveZ);
+
+        const targetDeltaX = moveX * moveSpeed * dt;
+        const targetDeltaZ = moveZ * moveSpeed * dt;
+
+        // Candidate new position
+        let nextX = playerPos.x + targetDeltaX;
+        let nextZ = playerPos.z + targetDeltaZ;
+
+        // Player physical collision radius
+        const PLAYER_RADIUS = 0.45;
+
+        // Helper to check if a circle at (cx, cz) overlaps any registered solid obstacle
+        function collidesWithObstacles(cx: number, cz: number): boolean {
+          for (const obs of worldColliders) {
+            if (
+              cx + PLAYER_RADIUS > obs.minX &&
+              cx - PLAYER_RADIUS < obs.maxX &&
+              cz + PLAYER_RADIUS > obs.minZ &&
+              cz - PLAYER_RADIUS < obs.maxZ
+            ) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        // Check collision on X axis (allows sliding along walls)
+        if (!collidesWithObstacles(nextX, playerPos.z)) {
+          playerPos.x = nextX;
+        }
+        // Check collision on Z axis (allows sliding along walls)
+        if (!collidesWithObstacles(playerPos.x, nextZ)) {
+          playerPos.z = nextZ;
+        }
+
+        // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
+        const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
+        if (!onCrossStreet) {
+          playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
+        } else {
+          playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
+        }
+        playerPos.z = Math.max(-280.0, Math.min(280.0, playerPos.z));
+
+        // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
+        const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
+        playerPos.y = onSidewalk ? 0.05 : 0.0;
+      }
+
+      if (avatar) {
+        avatar.updateAnimation(dt, isMoving, 1.2);
+      }
     }
   }
 

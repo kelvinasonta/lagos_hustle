@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type VehicleType = 'danfo' | 'sedan' | 'keke';
+export type VehicleType = 'danfo' | 'sedan' | 'keke' | 'bicycle' | 'scooter';
 
 export interface VehicleOptions {
   type?: VehicleType;
@@ -14,6 +14,8 @@ export interface VehicleOptions {
  * 1. Iconic Yellow Danfo Bus (Volkswagen T3 / LT style with dual black stripes)
  * 2. Lagos Taxi / Sedan (Sedan car)
  * 3. Keke Napep (Yellow 3-wheeler tricycle)
+ * 4. Delivery Bicycle (Fast pedal dispatch bike)
+ * 5. Okawa / Dispatch Motor Scooter (Lagos dispatch courier bike with rear parcel box)
  */
 export function createVehicle(options: VehicleOptions = {}): THREE.Group {
   const type = options.type || 'danfo';
@@ -22,6 +24,10 @@ export function createVehicle(options: VehicleOptions = {}): THREE.Group {
     return createDanfoBus(options.primaryColor ?? 0xf7bf1f, options.stripeColor ?? 0x141414);
   } else if (type === 'keke') {
     return createKekeNapep(options.primaryColor ?? 0xf7bf1f);
+  } else if (type === 'bicycle') {
+    return createBicycle(options.primaryColor ?? 0x2ed573);
+  } else if (type === 'scooter') {
+    return createMotorScooter(options.primaryColor ?? 0xe74c3c);
   } else {
     return createSedan(options.primaryColor ?? 0x34495e);
   }
@@ -272,4 +278,182 @@ export function createKekeNapep(color = 0xf7bf1f): THREE.Group {
   }
 
   return keke;
+}
+
+/**
+ * Lagos Dispatch Bicycle (Eco delivery bike with front basket and rear courier rack)
+ */
+export function createBicycle(frameColor = 0x2ed573): THREE.Group {
+  const bike = new THREE.Group();
+
+  const frameMat = new THREE.MeshStandardMaterial({ color: frameColor, roughness: 0.3, metalness: 0.7 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.2, metalness: 0.9 });
+  const rubberMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.9 });
+  const saddleMat = new THREE.MeshStandardMaterial({ color: 0x2f3542, roughness: 0.8 });
+
+  // Wheels (Front & Rear)
+  const wheelGeo = new THREE.TorusGeometry(0.38, 0.04, 8, 20);
+  const frontWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  frontWheel.position.set(0, 0.38, 0.75);
+  bike.add(frontWheel);
+
+  const rearWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  rearWheel.position.set(0, 0.38, -0.75);
+  rearWheel.castShadow = true;
+  bike.add(rearWheel);
+
+  // Wheel hubs & spokes (spoke discs)
+  const spokeGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.02, 12);
+  const spokeMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true });
+  const frontSpokes = new THREE.Mesh(spokeGeo, spokeMat);
+  frontSpokes.rotation.z = Math.PI / 2;
+  frontSpokes.position.copy(frontWheel.position);
+  bike.add(frontSpokes);
+
+  const rearSpokes = new THREE.Mesh(spokeGeo, spokeMat);
+  rearSpokes.rotation.z = Math.PI / 2;
+  rearSpokes.position.copy(rearWheel.position);
+  bike.add(rearSpokes);
+
+  // Diamond Frame Tubes
+  const tubeGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8);
+
+  // Bottom tube
+  const bottomTube = new THREE.Mesh(tubeGeo, frameMat);
+  bottomTube.position.set(0, 0.45, 0);
+  bottomTube.rotation.x = Math.PI / 2;
+  bike.add(bottomTube);
+
+  // Seat tube
+  const seatTube = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.65, 8), frameMat);
+  seatTube.position.set(0, 0.65, -0.2);
+  seatTube.rotation.x = 0.25;
+  bike.add(seatTube);
+
+  // Down tube
+  const downTube = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.85, 8), frameMat);
+  downTube.position.set(0, 0.62, 0.25);
+  downTube.rotation.x = -0.55;
+  bike.add(downTube);
+
+  // Top tube
+  const topTube = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.8, 8), frameMat);
+  topTube.position.set(0, 0.85, 0.05);
+  topTube.rotation.x = 1.45;
+  bike.add(topTube);
+
+  // Saddle / Seat
+  const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.3), saddleMat);
+  saddle.position.set(0, 0.98, -0.22);
+  bike.add(saddle);
+
+  // Handlebars & Fork
+  const handlebar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.65, 8), chromeMat);
+  handlebar.rotation.z = Math.PI / 2;
+  handlebar.position.set(0, 1.02, 0.58);
+  bike.add(handlebar);
+
+  // Front Dispatch Basket
+  const basket = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38, 0.22, 0.28),
+    new THREE.MeshStandardMaterial({ color: 0x747d8c, roughness: 0.7, wireframe: false })
+  );
+  basket.position.set(0, 0.92, 0.82);
+  bike.add(basket);
+
+  return bike;
+}
+
+/**
+ * Lagos Dispatch Motor Scooter / Okada (High-speed courier bike with rear thermal delivery box)
+ */
+export function createMotorScooter(color = 0xe74c3c): THREE.Group {
+  const scooter = new THREE.Group();
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.4 });
+  const engineMat = new THREE.MeshStandardMaterial({ color: 0x2f3542, roughness: 0.6, metalness: 0.7 });
+  const rubberMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.9 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.2, metalness: 0.9 });
+  const deliveryBoxMat = new THREE.MeshStandardMaterial({ color: 0xf39c12, roughness: 0.5 }); // Bright Yellow Dispatch Box
+  const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfffae6, emissive: 0xffeaa7, emissiveIntensity: 1.5 });
+
+  // Wheels (Chunky scooter tyres)
+  const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.16, 14);
+
+  const frontWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  frontWheel.rotation.z = Math.PI / 2;
+  frontWheel.position.set(0, 0.32, 0.95);
+  frontWheel.castShadow = true;
+  scooter.add(frontWheel);
+
+  const rearWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  rearWheel.rotation.z = Math.PI / 2;
+  rearWheel.position.set(0, 0.32, -0.75);
+  rearWheel.castShadow = true;
+  scooter.add(rearWheel);
+
+  // Low Step-Through Chassis & Footboard
+  const footboard = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 1.4), bodyMat);
+  footboard.position.set(0, 0.35, 0.1);
+  footboard.castShadow = true;
+  scooter.add(footboard);
+
+  // Front Fairing Cowl & Headlight
+  const frontFairing = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.75, 0.35), bodyMat);
+  frontFairing.position.set(0, 0.85, 0.85);
+  frontFairing.rotation.x = -0.15;
+  scooter.add(frontFairing);
+
+  const headlight = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 12), headlightMat);
+  headlight.rotation.x = Math.PI / 2;
+  headlight.position.set(0, 0.95, 1.05);
+  scooter.add(headlight);
+
+  // Handlebars & Mirrors
+  const handlebar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.72, 8), chromeMat);
+  handlebar.rotation.z = Math.PI / 2;
+  handlebar.position.set(0, 1.15, 0.78);
+  scooter.add(handlebar);
+
+  // Dual Rearview Mirrors
+  for (let mx of [-0.34, 0.34]) {
+    const mirrorStem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.2, 6), chromeMat);
+    mirrorStem.position.set(mx, 1.25, 0.8);
+    scooter.add(mirrorStem);
+
+    const mirror = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 12), chromeMat);
+    mirror.position.set(mx, 1.34, 0.8);
+    scooter.add(mirror);
+  }
+
+  // Seat / Leather Saddle
+  const seat = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38, 0.14, 0.75),
+    new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.8 })
+  );
+  seat.position.set(0, 0.68, -0.05);
+  scooter.add(seat);
+
+  // Large Insulated Dispatch / Delivery Box on Rear Rack
+  const deliveryBox = new THREE.Mesh(
+    new THREE.BoxGeometry(0.65, 0.55, 0.6),
+    deliveryBoxMat
+  );
+  deliveryBox.position.set(0, 0.95, -0.7);
+  deliveryBox.castShadow = true;
+  scooter.add(deliveryBox);
+
+  // Chrome exhaust pipe
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8), chromeMat);
+  exhaust.rotation.x = Math.PI / 2;
+  exhaust.position.set(0.32, 0.35, -0.45);
+  scooter.add(exhaust);
+
+  // Engine block casing
+  const engineBlock = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 0.45), engineMat);
+  engineBlock.position.set(0, 0.4, -0.4);
+  engineBlock.castShadow = true;
+  scooter.add(engineBlock);
+
+  return scooter;
 }
