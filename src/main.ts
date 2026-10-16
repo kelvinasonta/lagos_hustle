@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { AvatarGenerator } from './character/AvatarGenerator';
 import { askStartNg, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
 import { createVehicle, VehicleType } from './vehicles/DanfoGenerator';
+import { lagosAudio } from './audio/LagosAudio';
 
 // 1. Scene setup
 const container = document.getElementById('canvas-container')!;
@@ -1112,7 +1113,7 @@ const moveSpeed = 7.0;
 let currentVehicle: RidableVehicle | null = null;
 const vehiclePromptEl = document.getElementById('vehicle-prompt');
 
-// E key listener for Mounting / Dismounting vehicles
+// E key listener for Mounting / Dismounting vehicles, H key for Horn / Bell
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
     if (currentVehicle) {
@@ -1125,8 +1126,23 @@ window.addEventListener('keydown', (e) => {
         mountVehicle(nearby);
       }
     }
+  } else if (e.code === 'KeyH') {
+    soundHornOrBell();
   }
 });
+
+function soundHornOrBell() {
+  if (currentVehicle) {
+    if (currentVehicle.type === 'bicycle') {
+      lagosAudio.playBicycleBell();
+    } else {
+      lagosAudio.playDanfoHorn();
+    }
+  } else {
+    // On foot, whistle/holler horn
+    lagosAudio.playDanfoHorn();
+  }
+}
 
 function getNearestRidableVehicle(maxDist = 3.2): RidableVehicle | null {
   let closest: RidableVehicle | null = null;
@@ -1258,74 +1274,6 @@ const missions: HustleMission[] = [
   }
 ];
 
-// Web Audio synthesizer for crisp arcade chime sounds (no external files needed)
-let audioCtx: AudioContext | null = null;
-function playCashChime() {
-  try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc1.type = 'triangle';
-    osc2.type = 'sine';
-
-    // Cheerful high-pitch double cash register ding
-    const t = audioCtx.currentTime;
-    osc1.frequency.setValueAtTime(587.33, t); // D5
-    osc1.frequency.setValueAtTime(880.00, t + 0.08); // A5
-    osc1.frequency.setValueAtTime(1174.66, t + 0.16); // D6
-
-    osc2.frequency.setValueAtTime(1174.66, t);
-    osc2.frequency.setValueAtTime(1760.00, t + 0.16);
-
-    gain.gain.setValueAtTime(0.3, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc1.start(t);
-    osc2.start(t);
-    osc1.stop(t + 0.5);
-    osc2.stop(t + 0.5);
-  } catch (e) {
-    // Audio context silent fallback
-  }
-}
-
-function playPickupChime() {
-  try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const t = audioCtx.currentTime;
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(440, t);
-    osc.frequency.exponentialRampToValueAtTime(880, t + 0.2);
-
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.25);
-  } catch (e) {}
-}
-
 // 3D Carried Parcel Mesh attached to player's hands/chest
 const parcelMesh = new THREE.Group();
 const parcelBox = new THREE.Mesh(
@@ -1397,9 +1345,163 @@ const taskTitleEl = document.getElementById('task-title');
 const taskDescEl = document.getElementById('task-desc');
 const taskStepEl = document.getElementById('task-step');
 const taskRewardTagEl = document.getElementById('task-reward-tag');
-const targetDistEl = document.getElementById('target-dist');
+const taskTargetEl = document.getElementById('task-target');
 const walletBalanceEl = document.getElementById('wallet-balance');
 const toastEl = document.getElementById('toast-notification');
+
+// Upgrade & Shop Inventory State
+let hasTurboOkada = false;
+let hasNeonVest = false;
+let hasGoldenAgbada = false;
+let hasHotBox = false;
+
+// Delivery Timer & Tip System (90 seconds countdown per delivery stage)
+const TOTAL_STAGE_TIME = 90.0;
+let stageTimeRemaining = TOTAL_STAGE_TIME;
+const timerBarFillEl = document.getElementById('timer-bar-fill');
+const timerTextEl = document.getElementById('timer-text');
+const lastmaBannerEl = document.getElementById('lastma-banner');
+
+// Shop UI Elements
+const shopBtnEl = document.getElementById('shop-btn');
+const shopModalEl = document.getElementById('shop-modal');
+const shopCloseBtnEl = document.getElementById('shop-close');
+const buyTurboBtnEl = document.getElementById('buy-turbo-btn');
+const buyOutfitBtnEl = document.getElementById('buy-outfit-btn');
+const buyAgbadaBtnEl = document.getElementById('buy-agbada-btn');
+const buyHotboxBtnEl = document.getElementById('buy-hotbox-btn');
+const hornBtnEl = document.getElementById('horn-btn');
+
+if (hornBtnEl) {
+  hornBtnEl.addEventListener('click', () => {
+    soundHornOrBell();
+  });
+}
+
+if (shopBtnEl && shopModalEl) {
+  shopBtnEl.addEventListener('click', () => {
+    shopModalEl.style.display = 'flex';
+  });
+}
+
+if (shopCloseBtnEl && shopModalEl) {
+  shopCloseBtnEl.addEventListener('click', () => {
+    shopModalEl.style.display = 'none';
+  });
+}
+
+// Shop Purchases
+if (buyTurboBtnEl) {
+  buyTurboBtnEl.addEventListener('click', () => {
+    if (playerEarnings >= 10000 && !hasTurboOkada) {
+      playerEarnings -= 10000;
+      hasTurboOkada = true;
+      buyTurboBtnEl.textContent = 'INSTALLED ✓';
+      buyTurboBtnEl.classList.add('bought');
+      // Upgrade all parked & current scooters
+      ridableVehicles.forEach((v) => {
+        if (v.type === 'scooter') v.maxSpeed = 24.0;
+      });
+      lagosAudio.playCashChime(true);
+      updateMissionHUD();
+    }
+  });
+}
+
+if (buyOutfitBtnEl) {
+  buyOutfitBtnEl.addEventListener('click', () => {
+    if (playerEarnings >= 7500 && !hasNeonVest) {
+      playerEarnings -= 7500;
+      hasNeonVest = true;
+      buyOutfitBtnEl.textContent = 'EQUIPPED ✓';
+      buyOutfitBtnEl.classList.add('bought');
+      if (avatar) avatar.setOutfit(0x00ff88, 0x1e272e); // Neon vest
+      lagosAudio.playCashChime(true);
+      updateMissionHUD();
+    }
+  });
+}
+
+if (buyAgbadaBtnEl) {
+  buyAgbadaBtnEl.addEventListener('click', () => {
+    if (playerEarnings >= 25000 && !hasGoldenAgbada) {
+      playerEarnings -= 25000;
+      hasGoldenAgbada = true;
+      buyAgbadaBtnEl.textContent = 'EQUIPPED ✓';
+      buyAgbadaBtnEl.classList.add('bought');
+      if (avatar) avatar.setOutfit(0xf1c40f, 0xf39c12); // Golden Agbada
+      lagosAudio.playCashChime(true);
+      updateMissionHUD();
+    }
+  });
+}
+
+if (buyHotboxBtnEl) {
+  buyHotboxBtnEl.addEventListener('click', () => {
+    if (playerEarnings >= 15000 && !hasHotBox) {
+      playerEarnings -= 15000;
+      hasHotBox = true;
+      buyHotboxBtnEl.textContent = 'ACTIVE ✓';
+      buyHotboxBtnEl.classList.add('bought');
+      lagosAudio.playCashChime(true);
+      updateMissionHUD();
+    }
+  });
+}
+
+// Mobile Touch Controls
+const touchUp = document.getElementById('touch-up');
+const touchDown = document.getElementById('touch-down');
+const touchLeft = document.getElementById('touch-left');
+const touchRight = document.getElementById('touch-right');
+const touchMount = document.getElementById('touch-mount');
+const touchHorn = document.getElementById('touch-horn');
+const mobileControlsEl = document.getElementById('mobile-controls');
+const mobileActionsEl = document.getElementById('mobile-actions');
+
+// Show mobile controls automatically on touch-enabled screens
+if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) {
+  if (mobileControlsEl) mobileControlsEl.style.display = 'flex';
+  if (mobileActionsEl) mobileActionsEl.style.display = 'flex';
+}
+
+function bindTouchKey(el: HTMLElement | null, key: string) {
+  if (!el) return;
+  const start = (ev: Event) => {
+    ev.preventDefault();
+    keys[key] = true;
+  };
+  const end = (ev: Event) => {
+    ev.preventDefault();
+    keys[key] = false;
+  };
+  el.addEventListener('touchstart', start);
+  el.addEventListener('touchend', end);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+}
+bindTouchKey(touchUp, 'KeyW');
+bindTouchKey(touchDown, 'KeyS');
+bindTouchKey(touchLeft, 'KeyA');
+bindTouchKey(touchRight, 'KeyD');
+
+if (touchMount) {
+  touchMount.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    if (currentVehicle) {
+      dismountCurrentVehicle();
+    } else {
+      const nearby = getNearestRidableVehicle(3.2);
+      if (nearby) mountVehicle(nearby);
+    }
+  });
+}
+if (touchHorn) {
+  touchHorn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    soundHornOrBell();
+  });
+}
 
 function updateMissionHUD() {
   const current = missions[currentMissionIndex % missions.length];
@@ -1440,7 +1542,8 @@ function triggerStageTransition() {
   if (currentStage === 'pickup') {
     // Successfully collected item
     currentStage = 'dropoff';
-    playPickupChime();
+    stageTimeRemaining = TOTAL_STAGE_TIME; // Reset countdown for dropoff rush
+    lagosAudio.playPickup();
 
     if (toastEl) {
       toastEl.textContent = `📦 PACKAGE COLLECTED! NOW DELIVER TO ${current.dropoffLabel.toUpperCase()}`;
@@ -1451,14 +1554,26 @@ function triggerStageTransition() {
     }
   } else {
     // Successfully delivered!
-    playerEarnings += current.reward;
+    // Calculate tip bonus if delivered quickly
+    let tipBonus = 0;
+    if (stageTimeRemaining > 45) {
+      tipBonus = hasHotBox ? 5000 : 2500;
+    } else if (stageTimeRemaining > 15) {
+      tipBonus = hasHotBox ? 2000 : 1000;
+    }
+
+    const totalEarned = current.reward + tipBonus;
+    playerEarnings += totalEarned;
     completedDeliveries++;
     currentStage = 'pickup';
     currentMissionIndex++;
-    playCashChime();
+    stageTimeRemaining = TOTAL_STAGE_TIME;
+
+    lagosAudio.playCashChime(tipBonus > 0);
 
     if (toastEl) {
-      toastEl.textContent = `+₦${current.reward.toLocaleString()} EARNED! ${current.title.toUpperCase()} COMPLETE!`;
+      const tipText = tipBonus > 0 ? ` (+₦${tipBonus.toLocaleString()} FAST TIP!)` : '';
+      toastEl.textContent = `+₦${totalEarned.toLocaleString()} EARNED!${tipText} ${current.title.toUpperCase()} COMPLETE!`;
       toastEl.style.display = 'block';
       setTimeout(() => {
         toastEl.style.display = 'none';
@@ -1473,6 +1588,7 @@ function killPlayer(hitCar: TrafficVehicle) {
   if (isDead) return;
   isDead = true;
   deathTimer = 2.5; // 2.5s respawn sequence
+  lagosAudio.playCrashSound();
 
   // If riding a bicycle/scooter/danfo, knock player off vehicle
   if (currentVehicle) {
@@ -1830,10 +1946,11 @@ function animate() {
       }
 
       if (avatar) {
-        const isPedaling = Math.abs(currentVehicle.speed) > 0.5;
-        avatar.updateAnimation(dt, isPedaling, currentVehicle.type === 'bicycle' ? 2.0 : 0.8);
+        avatar.updateRidingAnimation(dt, currentVehicle.type, currentVehicle.speed);
       }
+      lagosAudio.updateEngineSound(currentVehicle.type, currentVehicle.speed, currentVehicle.maxSpeed);
     } else {
+      lagosAudio.updateEngineSound(null, 0, 0);
       // ON FOOT WALKING MOVEMENT
       let inputX = 0;
       let inputZ = 0;
@@ -2122,8 +2239,41 @@ function animate() {
   const currentMission = missions[currentMissionIndex % missions.length];
   const targetPos = currentStage === 'pickup' ? currentMission.pickupPos : currentMission.dropoffPos;
   const distToTarget = playerPos.distanceTo(targetPos);
-  if (targetDistEl) {
-    targetDistEl.textContent = `📍 ${Math.round(distToTarget)}m`;
+  if (taskTargetEl) {
+    taskTargetEl.textContent = `📍 ${Math.round(distToTarget)}m away`;
+  }
+  // Update Delivery Countdown Timer & Hot Tip Gauge
+  if (currentStage === 'dropoff') {
+    stageTimeRemaining = Math.max(0, stageTimeRemaining - dt);
+    const pct = (stageTimeRemaining / TOTAL_STAGE_TIME) * 100;
+    if (timerBarFillEl) {
+      timerBarFillEl.style.width = `${pct}%`;
+    }
+    if (timerTextEl) {
+      const tipVal = stageTimeRemaining > 45 ? (hasHotBox ? 5000 : 2500) : stageTimeRemaining > 15 ? (hasHotBox ? 2000 : 1000) : 0;
+      const tipText = tipVal > 0 ? `(TIP: +₦${tipVal.toLocaleString()})` : `(COLD - NO TIP)`;
+      timerTextEl.textContent = `⏱️ ${Math.ceil(stageTimeRemaining)}s ${tipText}`;
+    }
+  } else {
+    if (timerBarFillEl) timerBarFillEl.style.width = '100%';
+    if (timerTextEl) timerTextEl.textContent = '⏱️ 90s (PICKUP STAGE)';
+  }
+
+  // LASTMA Traffic & Speed Checkpoint near CMS Central Intersection (Z between -15 and 15)
+  const inLastmaZone = Math.abs(playerPos.z) < 16.0 && Math.abs(playerPos.x) < 8.0;
+  const isAvenueLightRed = trafficPhase === 'cross_green' || trafficPhase === 'cross_yellow';
+  if (inLastmaZone && currentVehicle && (currentVehicle.speed > 13.0 || isAvenueLightRed)) {
+    if (lastmaBannerEl && lastmaBannerEl.style.display !== 'block') {
+      lastmaBannerEl.style.display = 'block';
+      lagosAudio.playSirenChirp();
+      if (playerEarnings >= 500) {
+        playerEarnings = Math.max(0, playerEarnings - 500); // ₦500 spot ticket!
+        if (walletBalanceEl) walletBalanceEl.textContent = `₦${playerEarnings.toLocaleString()}`;
+      }
+      setTimeout(() => {
+        if (lastmaBannerEl) lastmaBannerEl.style.display = 'none';
+      }, 3000);
+    }
   }
 
   // Check objective arrival / completion (within 2.8m of beacon)
