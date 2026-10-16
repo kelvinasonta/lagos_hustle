@@ -1045,28 +1045,77 @@ rebuildAvatar(currentUser);
 
 // Fetch start.ng identity & display player profile card
 async function initIdentity() {
-  const reply = await askStartNg<WhoAmIReply>({ type: 'startng:whoami' }, 'startng:user', 4000);
-  const p = reply?.user ?? reply?.guest;
-  if (p) {
-    currentUser = p;
-    rebuildAvatar(p);
-    const cardEl = document.getElementById('player-card');
-    const faceEl = document.getElementById('player-face') as HTMLImageElement;
-    const nameEl = document.getElementById('player-name');
-    const accEl = document.getElementById('player-account');
-    const signinBtn = document.getElementById('player-sign-in');
-    if (cardEl && faceEl && nameEl && accEl) {
-      if (p.face) faceEl.src = p.face;
-      nameEl.textContent = p.name || 'Lagos Hustler';
-      accEl.textContent = reply?.user?.account ? `@${reply.user.account}` : 'Guest';
-      if (signinBtn) {
-        signinBtn.style.display = reply?.user ? 'none' : 'inline-block';
-        signinBtn.onclick = () => {
-          window.location.href = `https://start.ng/?return_to=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
-        };
-      }
-      cardEl.style.display = 'flex';
+  try {
+    // 1. Pick up game session if redirected from sign-in
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const sessionToken = hashParams.get('startng_session');
+    if (sessionToken) {
+      sessionStorage.setItem('startng_session', sessionToken);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
+
+    const savedSession = sessionStorage.getItem('startng_session');
+    let fetchedUser: StartNgUser | null = null;
+
+    // 2. Try the HTTP API if session token is present
+    if (savedSession) {
+      try {
+        const gameName = window.location.hostname.split('.')[0] || 'lagos-hustle';
+        const res = await fetch(`https://api.start.ng/games/${gameName}/player`, {
+          headers: { Authorization: `Bearer ${savedSession}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.style) {
+            fetchedUser = {
+              id: data.id,
+              name: data.name,
+              account: data.name.toLowerCase().replace(/\s+/g, '_'),
+              style: data.style,
+              face: data.face || ''
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Direct start.ng player session fetch error:', err);
+      }
+    }
+
+    // 3. Query via the connect iframe postMessage protocol
+    if (!fetchedUser) {
+      const reply = await askStartNg<WhoAmIReply>({ type: 'startng:whoami' }, 'startng:user', 5000);
+      fetchedUser = reply?.user ?? reply?.guest ?? null;
+      if (reply?.user?.account && fetchedUser) {
+        fetchedUser.account = reply.user.account;
+      }
+    }
+
+    // 4. Update 3D avatar & HUD card if player or guest was received
+    if (fetchedUser) {
+      currentUser = fetchedUser;
+      rebuildAvatar(fetchedUser);
+
+      const cardEl = document.getElementById('player-card');
+      const faceEl = document.getElementById('player-face') as HTMLImageElement;
+      const nameEl = document.getElementById('player-name');
+      const accEl = document.getElementById('player-account');
+      const signinBtn = document.getElementById('player-sign-in');
+      if (cardEl && faceEl && nameEl && accEl) {
+        if (fetchedUser.face) faceEl.src = fetchedUser.face;
+        nameEl.textContent = fetchedUser.name || 'Lagos Hustler';
+        accEl.textContent = fetchedUser.account ? `@${fetchedUser.account}` : 'Guest';
+        if (signinBtn) {
+          const isSignedIn = !!(savedSession || fetchedUser.id !== 0);
+          signinBtn.style.display = isSignedIn ? 'none' : 'inline-block';
+          signinBtn.onclick = () => {
+            window.location.href = `https://start.ng/?return_to=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
+          };
+        }
+        cardEl.style.display = 'flex';
+      }
+    }
+  } catch (err) {
+    console.error('initIdentity failure:', err);
   }
 }
 initIdentity();

@@ -78,7 +78,7 @@ export class AvatarGenerator {
     this.head.add(leftEye);
     this.head.add(rightEye);
 
-    // Hair Styles
+    // Hair Styles (short, afro, braids, bun, ponytail, dreads, bald)
     if (hairType === 'afro') {
       const afro = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), hairMat);
       afro.position.set(0, 0.14, -0.02);
@@ -87,12 +87,27 @@ export class AvatarGenerator {
       const hairBase = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.34), hairMat);
       hairBase.position.y = 0.14;
       this.head.add(hairBase);
-      // Dreads falling down
+      // Dreads/braids falling down
       for (let i = -0.12; i <= 0.12; i += 0.06) {
         const dread = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3), hairMat);
         dread.position.set(i, -0.08, -0.14);
         this.head.add(dread);
       }
+    } else if (hairType === 'bun') {
+      const hairCap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.32), hairMat);
+      hairCap.position.y = 0.14;
+      this.head.add(hairCap);
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), hairMat);
+      bun.position.set(0, 0.24, -0.1);
+      this.head.add(bun);
+    } else if (hairType === 'ponytail') {
+      const hairCap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.32), hairMat);
+      hairCap.position.y = 0.14;
+      this.head.add(hairCap);
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.25), hairMat);
+      tail.position.set(0, 0.08, -0.2);
+      tail.rotation.x = -Math.PI / 6;
+      this.head.add(tail);
     } else if (hairType !== 'bald') {
       // Default / short
       const hairCap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.32), hairMat);
@@ -100,7 +115,7 @@ export class AvatarGenerator {
       this.head.add(hairCap);
     }
 
-    // Hats
+    // Hats (none, cap, beanie, tophat, crown)
     if (hatType === 'cap') {
       const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.19, 0.1, 12), hatMat);
       capTop.position.y = 0.2;
@@ -117,9 +132,16 @@ export class AvatarGenerator {
       beanie.scale.set(1, 1.2, 1);
       beanie.position.y = 0.18;
       this.head.add(beanie);
+    } else if (hatType === 'tophat') {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 12), hatMat);
+      brim.position.y = 0.18;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.22, 12), hatMat);
+      crown.position.y = 0.29;
+      this.head.add(brim);
+      this.head.add(crown);
     }
 
-    // Accessories
+    // Accessories (none, glasses, earrings, beard, scarf, backpack)
     if (accessoryType === 'glasses') {
       const glassMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
       const frames = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.06, 0.04), glassMat);
@@ -130,6 +152,23 @@ export class AvatarGenerator {
       earring.position.set(0.17, -0.02, 0);
       earring.rotation.y = Math.PI / 2;
       this.head.add(earring);
+    } else if (accessoryType === 'beard') {
+      const beard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.08), hairMat);
+      beard.position.set(0, -0.12, 0.14);
+      this.head.add(beard);
+    } else if (accessoryType === 'scarf') {
+      const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.06, 8, 12), this.shirtMat);
+      scarf.position.set(0, -0.22, 0);
+      scarf.rotation.x = Math.PI / 2;
+      this.head.add(scarf);
+    }
+
+    if (accessoryType === 'backpack') {
+      const packMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8 });
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.44, 0.18), packMat);
+      pack.position.set(0, 0, -0.22);
+      pack.castShadow = true;
+      this.torso.add(pack);
     }
 
     this.characterMesh.add(this.head);
