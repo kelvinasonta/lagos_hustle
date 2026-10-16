@@ -67,12 +67,96 @@
         0%, 100% { transform: scale(1); }
         50% { transform: scale(1.05); }
       }
+      #task-card {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        background: rgba(18, 18, 24, 0.9);
+        border: 1px solid rgba(247, 191, 31, 0.4);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        border-radius: 10px;
+        padding: 12px 18px;
+        color: #fff;
+        z-index: 20;
+        min-width: 280px;
+        pointer-events: none;
+      }
+      #task-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      #task-badge {
+        background: #f7bf1f;
+        color: #141414;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      #wallet-balance {
+        font-family: monospace;
+        font-size: 15px;
+        font-weight: 700;
+        color: #2ed573;
+      }
+      #task-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #f1f2f6;
+        margin-bottom: 4px;
+      }
+      #task-desc {
+        font-size: 12px;
+        color: #a4b0be;
+        line-height: 1.4;
+      }
+      #task-target {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #eccc68;
+        font-weight: 600;
+      }
+      #toast-notification {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #2ed573;
+        color: #111;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 20px rgba(46, 213, 115, 0.5);
+        display: none;
+        z-index: 100;
+        animation: toastPop 0.4s ease;
+      }
+      @keyframes toastPop {
+        from { transform: translate(-50%, -20px); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+      }
     </style>
   </head>
   <body>
     <div id="canvas-container"></div>
     <div id="fps-counter">FPS: 60</div>
-    <div id="instructions">Eko Streets — Move: W A S D / Arrow Keys | Beware of oncoming traffic!</div>
+    <div id="task-card">
+      <div id="task-header">
+        <span id="task-badge">LAGOS HUSTLE</span>
+        <span id="wallet-balance">₦0</span>
+      </div>
+      <div id="task-title">Dispatch Delivery</div>
+      <div id="task-desc">Pick up parcel from Mama Bola's Market Stall and deliver across the avenue.</div>
+      <div id="task-target">📍 Target: <span id="target-dist">15m away</span></div>
+    </div>
+    <div id="toast-notification">₦5,000 EARNED! TASK COMPLETE!</div>
+    <div id="instructions">Eko Streets — Move: W A S D / Arrow Keys | Complete deliveries without getting hit!</div>
     <div id="wasted-screen">
       <div id="wasted-title">WASTED</div>
       <div id="wasted-sub">Hit by oncoming vehicle! Respawning...</div>

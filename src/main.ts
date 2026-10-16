@@ -535,6 +535,115 @@ let deathTimer = 0;
 let deathVelocity = new THREE.Vector3();
 const wastedScreenEl = document.getElementById('wasted-screen')!;
 
+// 7. Lagos Hustle Task & Mission System
+interface HustleMission {
+  id: number;
+  title: string;
+  desc: string;
+  targetPos: THREE.Vector3;
+  targetLabel: string;
+  reward: number;
+}
+
+let playerEarnings = 0;
+let completedDeliveries = 0;
+let currentMissionIndex = 0;
+
+const missions: HustleMission[] = [
+  {
+    id: 1,
+    title: 'Mama Bola Food Delivery',
+    desc: 'Cross the avenue and deliver hot Jollof Rice to the Blue Kiosk on the West sidewalk.',
+    targetPos: new THREE.Vector3(-11.5, 0.8, -25),
+    targetLabel: 'Mama Bola\'s Customer',
+    reward: 5000
+  },
+  {
+    id: 2,
+    title: 'Computer Village Parts',
+    desc: 'Pick up essential phone spare parts from the market stall at Broad Street intersection.',
+    targetPos: new THREE.Vector3(35.0, 0.8, 5.0),
+    targetLabel: 'Broad St Kiosk',
+    reward: 7500
+  },
+  {
+    id: 3,
+    title: 'Danfo Spare Tyre Rush',
+    desc: 'Deliver a vulcanizer spare tyre to the broken down yellow Danfo at North Marina Road.',
+    targetPos: new THREE.Vector3(-7.5, 0.8, -80),
+    targetLabel: 'Broken Danfo',
+    reward: 10000
+  },
+  {
+    id: 4,
+    title: 'VIP Suya Package',
+    desc: 'Speed-deliver spiced Suya skewers to the commercial office plaza.',
+    targetPos: new THREE.Vector3(12.0, 0.8, 55),
+    targetLabel: 'Office Plaza',
+    reward: 12000
+  }
+];
+
+// 3D Glowing Waypoint Beacon (Rotating Diamond & Pulsing Ground Ring)
+const beaconGroup = new THREE.Group();
+const diamondGeo = new THREE.OctahedronGeometry(0.8, 0);
+const diamondMat = new THREE.MeshStandardMaterial({
+  color: 0xf7bf1f,
+  emissive: 0xf39c12,
+  emissiveIntensity: 1.2,
+  roughness: 0.2
+});
+const beaconDiamond = new THREE.Mesh(diamondGeo, diamondMat);
+beaconDiamond.position.y = 1.8;
+beaconDiamond.castShadow = true;
+beaconGroup.add(beaconDiamond);
+
+// Ground beacon pulse ring
+const ringGeo = new THREE.RingGeometry(0.9, 1.2, 24);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f, side: THREE.DoubleSide });
+const beaconRing = new THREE.Mesh(ringGeo, ringMat);
+beaconRing.rotation.x = -Math.PI / 2;
+beaconRing.position.y = 0.04;
+beaconGroup.add(beaconRing);
+
+scene.add(beaconGroup);
+
+// HUD Elements
+const taskTitleEl = document.getElementById('task-title');
+const taskDescEl = document.getElementById('task-desc');
+const targetDistEl = document.getElementById('target-dist');
+const walletBalanceEl = document.getElementById('wallet-balance');
+const toastEl = document.getElementById('toast-notification');
+
+function updateMissionHUD() {
+  const current = missions[currentMissionIndex % missions.length];
+  beaconGroup.position.copy(current.targetPos);
+  beaconGroup.position.y = 0;
+
+  if (taskTitleEl) taskTitleEl.textContent = current.title;
+  if (taskDescEl) taskDescEl.textContent = current.desc;
+  if (walletBalanceEl) walletBalanceEl.textContent = `₦${playerEarnings.toLocaleString()}`;
+}
+updateMissionHUD();
+
+function completeCurrentMission() {
+  const current = missions[currentMissionIndex % missions.length];
+  playerEarnings += current.reward;
+  completedDeliveries++;
+
+  // Show Toast
+  if (toastEl) {
+    toastEl.textContent = `+₦${current.reward.toLocaleString()} EARNED! ${current.title.toUpperCase()} COMPLETE!`;
+    toastEl.style.display = 'block';
+    setTimeout(() => {
+      toastEl.style.display = 'none';
+    }, 3000);
+  }
+
+  currentMissionIndex++;
+  updateMissionHUD();
+}
+
 function killPlayer(hitCar: TrafficVehicle) {
   if (isDead) return;
   isDead = true;
@@ -778,6 +887,28 @@ function animate() {
     }
     ped.avatar.group.position.z = ped.z;
     ped.avatar.updateAnimation(dt, true, 1.0);
+  }
+
+  // Update Mission Waypoint Beacon & Distance
+  if (beaconDiamond) {
+    beaconDiamond.rotation.y += dt * 2.5;
+    beaconDiamond.position.y = 1.8 + Math.sin(now * 0.004) * 0.25;
+  }
+  if (beaconRing) {
+    const scale = 1.0 + Math.sin(now * 0.006) * 0.15;
+    beaconRing.scale.set(scale, scale, 1);
+  }
+
+  // Calculate distance to current mission objective
+  const currentMission = missions[currentMissionIndex % missions.length];
+  const distToTarget = playerPos.distanceTo(currentMission.targetPos);
+  if (targetDistEl) {
+    targetDistEl.textContent = `${Math.round(distToTarget)}m away`;
+  }
+
+  // Check objective arrival / completion (within 2.8m of beacon)
+  if (!isDead && distToTarget < 2.8) {
+    completeCurrentMission();
   }
 
   renderer.render(scene, camera);
