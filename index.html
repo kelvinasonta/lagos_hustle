@@ -71,75 +71,121 @@
         position: fixed;
         top: 16px;
         left: 16px;
-        background: rgba(18, 18, 24, 0.9);
-        border: 1px solid rgba(247, 191, 31, 0.4);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-        border-radius: 10px;
-        padding: 12px 18px;
+        background: linear-gradient(135deg, rgba(20, 24, 30, 0.94), rgba(12, 14, 18, 0.96));
+        border: 1px solid rgba(247, 191, 31, 0.35);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(247, 191, 31, 0.15);
+        border-radius: 12px;
+        padding: 14px 18px;
         color: #fff;
         z-index: 20;
-        min-width: 280px;
+        min-width: 320px;
+        max-width: 360px;
         pointer-events: none;
+        backdrop-filter: blur(8px);
       }
       #task-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
       }
       #task-badge {
         background: #f7bf1f;
         color: #141414;
         font-size: 11px;
-        font-weight: 800;
-        padding: 2px 8px;
-        border-radius: 4px;
+        font-weight: 900;
+        padding: 3px 10px;
+        border-radius: 6px;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
+        box-shadow: 0 2px 8px rgba(247, 191, 31, 0.4);
+      }
+      #wallet-container {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #wallet-label {
+        font-size: 11px;
+        color: #a4b0be;
+        text-transform: uppercase;
+        font-weight: 700;
       }
       #wallet-balance {
         font-family: monospace;
-        font-size: 15px;
-        font-weight: 700;
+        font-size: 17px;
+        font-weight: 800;
         color: #2ed573;
+        text-shadow: 0 0 10px rgba(46, 213, 115, 0.4);
+      }
+      #task-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
       }
       #task-title {
-        font-size: 14px;
-        font-weight: 700;
-        color: #f1f2f6;
-        margin-bottom: 4px;
+        font-size: 15px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 0.3px;
+      }
+      #task-reward-tag {
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: 800;
+        color: #f7bf1f;
+        background: rgba(247, 191, 31, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(247, 191, 31, 0.3);
       }
       #task-desc {
         font-size: 12px;
-        color: #a4b0be;
-        line-height: 1.4;
+        color: #ced6e0;
+        line-height: 1.45;
+        margin-bottom: 8px;
+      }
+      #task-status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      #task-step {
+        font-size: 12px;
+        font-weight: 700;
+        color: #ff9f43;
       }
       #task-target {
-        margin-top: 6px;
         font-size: 12px;
         color: #eccc68;
-        font-weight: 600;
+        font-weight: 700;
+        font-family: monospace;
       }
       #toast-notification {
         position: fixed;
-        top: 80px;
+        top: 75px;
         left: 50%;
         transform: translateX(-50%);
-        background: #2ed573;
-        color: #111;
-        padding: 10px 24px;
+        background: linear-gradient(135deg, #2ed573, #26af5f);
+        color: #0b2b16;
+        padding: 12px 28px;
         border-radius: 30px;
-        font-weight: 800;
-        font-size: 15px;
+        font-weight: 900;
+        font-size: 16px;
         letter-spacing: 1px;
-        box-shadow: 0 4px 20px rgba(46, 213, 115, 0.5);
+        box-shadow: 0 6px 24px rgba(46, 213, 115, 0.6), 0 0 12px rgba(255, 255, 255, 0.4);
         display: none;
         z-index: 100;
-        animation: toastPop 0.4s ease;
+        animation: toastPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       @keyframes toastPop {
-        from { transform: translate(-50%, -20px); opacity: 0; }
-        to { transform: translate(-50%, 0); opacity: 1; }
+        from { transform: translate(-50%, -30px) scale(0.9); opacity: 0; }
+        to { transform: translate(-50%, 0) scale(1); opacity: 1; }
       }
     </style>
   </head>
@@ -149,11 +195,20 @@
     <div id="task-card">
       <div id="task-header">
         <span id="task-badge">LAGOS HUSTLE</span>
-        <span id="wallet-balance">₦0</span>
+        <div id="wallet-container">
+          <span id="wallet-label">WALLET</span>
+          <span id="wallet-balance">₦0</span>
+        </div>
       </div>
-      <div id="task-title">Dispatch Delivery</div>
-      <div id="task-desc">Pick up parcel from Mama Bola's Market Stall and deliver across the avenue.</div>
-      <div id="task-target">📍 Target: <span id="target-dist">15m away</span></div>
+      <div id="task-title-row">
+        <div id="task-title">Mama Bola Food Delivery</div>
+        <div id="task-reward-tag">+₦5,000</div>
+      </div>
+      <div id="task-desc">Go to Mama Bola's stall on the East sidewalk to pick up hot Jollof Rice.</div>
+      <div id="task-status-row">
+        <span id="task-step">📦 STAGE: PICKUP</span>
+        <span id="task-target">📍 15m away</span>
+      </div>
     </div>
     <div id="toast-notification">₦5,000 EARNED! TASK COMPLETE!</div>
     <div id="instructions">Eko Streets — Move: W A S D | Rotate View: Drag Mouse / Q & E | Avoid Traffic</div>

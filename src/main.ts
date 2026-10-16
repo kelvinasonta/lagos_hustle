@@ -782,112 +782,286 @@ let deathTimer = 0;
 let deathVelocity = new THREE.Vector3();
 const wastedScreenEl = document.getElementById('wasted-screen')!;
 
-// 7. Lagos Hustle Task & Mission System
+// 7. Lagos Hustle Task & Mission System (Living 2-Stage Pickup & Delivery)
+export type MissionStage = 'pickup' | 'dropoff';
+
 interface HustleMission {
   id: number;
   title: string;
-  desc: string;
-  targetPos: THREE.Vector3;
-  targetLabel: string;
+  pickupDesc: string;
+  dropoffDesc: string;
+  pickupPos: THREE.Vector3;
+  pickupLabel: string;
+  dropoffPos: THREE.Vector3;
+  dropoffLabel: string;
   reward: number;
+  itemType: 'food' | 'parts' | 'tyre' | 'suya';
 }
 
 let playerEarnings = 0;
 let completedDeliveries = 0;
 let currentMissionIndex = 0;
+let currentStage: MissionStage = 'pickup';
 
 const missions: HustleMission[] = [
   {
     id: 1,
-    title: 'Mama Bola Food Delivery',
-    desc: 'Cross the avenue and deliver hot Jollof Rice to the Blue Kiosk on the West sidewalk.',
-    targetPos: new THREE.Vector3(-11.5, 0.8, -25),
-    targetLabel: 'Mama Bola\'s Customer',
-    reward: 5000
+    title: 'Mama Bola Hot Jollof',
+    pickupDesc: 'Pick up steaming Jollof Rice package from Mama Bola\'s East sidewalk food stall.',
+    dropoffDesc: 'Deliver the hot food parcel safely across the avenue to the customer at Ojuelegba Kiosk.',
+    pickupPos: new THREE.Vector3(11.2, 0.45, 25),
+    pickupLabel: 'Mama Bola Food Stall',
+    dropoffPos: new THREE.Vector3(-11.5, 0.45, -55),
+    dropoffLabel: 'Ojuelegba Customer',
+    reward: 5000,
+    itemType: 'food'
   },
   {
     id: 2,
-    title: 'Computer Village Parts',
-    desc: 'Pick up essential phone spare parts from the market stall at Broad Street intersection.',
-    targetPos: new THREE.Vector3(35.0, 0.8, 5.0),
-    targetLabel: 'Broad St Kiosk',
-    reward: 7500
+    title: 'Computer Village Spare Parts',
+    pickupDesc: 'Collect electronic components from the electronics dealer at Broad Street cross road.',
+    dropoffDesc: 'Rush the package to the phone repair vendor on West Avenue sidewalk before closing.',
+    pickupPos: new THREE.Vector3(35.0, 0.45, 0),
+    pickupLabel: 'Electronics Dealer',
+    dropoffPos: new THREE.Vector3(-11.2, 0.45, 55),
+    dropoffLabel: 'Phone Repair Vendor',
+    reward: 7500,
+    itemType: 'parts'
   },
   {
     id: 3,
-    title: 'Danfo Spare Tyre Rush',
-    desc: 'Deliver a vulcanizer spare tyre to the broken down yellow Danfo at North Marina Road.',
-    targetPos: new THREE.Vector3(-7.5, 0.8, -80),
-    targetLabel: 'Broken Danfo',
-    reward: 10000
+    title: 'Danfo Vulcanizer Tyre Run',
+    pickupDesc: 'Pick up a heavy patched tyre from the vulcanizer at Marina Road intersection.',
+    dropoffDesc: 'Carry tyre to the stranded yellow Danfo bus waiting along the north avenue curb.',
+    pickupPos: new THREE.Vector3(-35.0, 0.45, -80),
+    pickupLabel: 'Vulcanizer Workshop',
+    dropoffPos: new THREE.Vector3(7.5, 0.45, -40),
+    dropoffLabel: 'Stranded Danfo Bus',
+    reward: 10000,
+    itemType: 'tyre'
   },
   {
     id: 4,
-    title: 'VIP Suya Package',
-    desc: 'Speed-deliver spiced Suya skewers to the commercial office plaza.',
-    targetPos: new THREE.Vector3(12.0, 0.8, 55),
-    targetLabel: 'Office Plaza',
-    reward: 12000
+    title: 'VIP Glover Suya Express',
+    pickupDesc: 'Pick up freshly grilled peppered Suya skewers wrapped in newspaper at South cross road.',
+    dropoffDesc: 'Deliver the VIP order to the executive commercial office entrance.',
+    pickupPos: new THREE.Vector3(42.0, 0.45, 80),
+    pickupLabel: 'Mai Suya Spot',
+    dropoffPos: new THREE.Vector3(14.0, 0.45, -20),
+    dropoffLabel: 'Office Executive Plaza',
+    reward: 12500,
+    itemType: 'suya'
   }
 ];
 
-// 3D Glowing Waypoint Beacon (Rotating Diamond & Pulsing Ground Ring)
+// Web Audio synthesizer for crisp arcade chime sounds (no external files needed)
+let audioCtx: AudioContext | null = null;
+function playCashChime() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc1.type = 'triangle';
+    osc2.type = 'sine';
+
+    // Cheerful high-pitch double cash register ding
+    const t = audioCtx.currentTime;
+    osc1.frequency.setValueAtTime(587.33, t); // D5
+    osc1.frequency.setValueAtTime(880.00, t + 0.08); // A5
+    osc1.frequency.setValueAtTime(1174.66, t + 0.16); // D6
+
+    osc2.frequency.setValueAtTime(1174.66, t);
+    osc2.frequency.setValueAtTime(1760.00, t + 0.16);
+
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + 0.5);
+    osc2.stop(t + 0.5);
+  } catch (e) {
+    // Audio context silent fallback
+  }
+}
+
+function playPickupChime() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const t = audioCtx.currentTime;
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, t);
+    osc.frequency.exponentialRampToValueAtTime(880, t + 0.2);
+
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  } catch (e) {}
+}
+
+// 3D Carried Parcel Mesh attached to player's hands/chest
+const parcelMesh = new THREE.Group();
+const parcelBox = new THREE.Mesh(
+  new THREE.BoxGeometry(0.42, 0.32, 0.42),
+  new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.8 }) // Brown packaging box
+);
+parcelBox.position.set(0, 0.9, 0.32);
+parcelBox.castShadow = true;
+parcelMesh.add(parcelBox);
+
+// Tape / string around parcel
+const tapeH = new THREE.Mesh(
+  new THREE.BoxGeometry(0.44, 0.06, 0.44),
+  new THREE.MeshStandardMaterial({ color: 0xf1c40f, roughness: 0.5 })
+);
+tapeH.position.set(0, 0.9, 0.32);
+parcelMesh.add(tapeH);
+
+parcelMesh.visible = false;
+playerGroup.add(parcelMesh);
+
+// 3D Glowing Waypoint Beacon (Rotating Diamond, Pulsing Rings & Floating Particle Sparkles)
 const beaconGroup = new THREE.Group();
-const diamondGeo = new THREE.OctahedronGeometry(0.8, 0);
+
+// Outer spinning diamond
+const diamondGeo = new THREE.OctahedronGeometry(0.7, 0);
 const diamondMat = new THREE.MeshStandardMaterial({
   color: 0xf7bf1f,
   emissive: 0xf39c12,
-  emissiveIntensity: 1.2,
+  emissiveIntensity: 1.5,
   roughness: 0.2
 });
 const beaconDiamond = new THREE.Mesh(diamondGeo, diamondMat);
-beaconDiamond.position.y = 1.8;
+beaconDiamond.position.y = 1.9;
 beaconDiamond.castShadow = true;
 beaconGroup.add(beaconDiamond);
 
-// Ground beacon pulse ring
-const ringGeo = new THREE.RingGeometry(0.9, 1.2, 24);
-const ringMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f, side: THREE.DoubleSide });
-const beaconRing = new THREE.Mesh(ringGeo, ringMat);
-beaconRing.rotation.x = -Math.PI / 2;
-beaconRing.position.y = 0.04;
-beaconGroup.add(beaconRing);
+// Ground beacon pulse ring 1
+const ringGeo1 = new THREE.RingGeometry(0.9, 1.25, 24);
+const ringMat1 = new THREE.MeshBasicMaterial({ color: 0xf7bf1f, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+const beaconRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+beaconRing1.rotation.x = -Math.PI / 2;
+beaconRing1.position.y = 0.04;
+beaconGroup.add(beaconRing1);
+
+// Ground beacon pulse ring 2
+const ringGeo2 = new THREE.RingGeometry(1.4, 1.6, 24);
+const ringMat2 = new THREE.MeshBasicMaterial({ color: 0x2ed573, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+const beaconRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+beaconRing2.rotation.x = -Math.PI / 2;
+beaconRing2.position.y = 0.035;
+beaconGroup.add(beaconRing2);
+
+// Vertical Light Pillar Cylinder
+const pillarGeo = new THREE.CylinderGeometry(0.18, 0.18, 12, 12);
+const pillarMat = new THREE.MeshBasicMaterial({
+  color: 0xf7bf1f,
+  transparent: true,
+  opacity: 0.25
+});
+const beaconPillar = new THREE.Mesh(pillarGeo, pillarMat);
+beaconPillar.position.y = 6.0;
+beaconGroup.add(beaconPillar);
 
 scene.add(beaconGroup);
 
 // HUD Elements
 const taskTitleEl = document.getElementById('task-title');
 const taskDescEl = document.getElementById('task-desc');
+const taskStepEl = document.getElementById('task-step');
+const taskRewardTagEl = document.getElementById('task-reward-tag');
 const targetDistEl = document.getElementById('target-dist');
 const walletBalanceEl = document.getElementById('wallet-balance');
 const toastEl = document.getElementById('toast-notification');
 
 function updateMissionHUD() {
   const current = missions[currentMissionIndex % missions.length];
-  beaconGroup.position.copy(current.targetPos);
-  beaconGroup.position.y = 0;
+  const isPickup = currentStage === 'pickup';
+  const targetPos = isPickup ? current.pickupPos : current.dropoffPos;
+
+  beaconGroup.position.copy(targetPos);
+
+  // Color theme: Orange/Yellow for Pickup, Green for Dropoff
+  if (isPickup) {
+    diamondMat.color.setHex(0xf7bf1f);
+    diamondMat.emissive.setHex(0xf39c12);
+    ringMat1.color.setHex(0xf7bf1f);
+    pillarMat.color.setHex(0xf7bf1f);
+    parcelMesh.visible = false;
+  } else {
+    diamondMat.color.setHex(0x2ed573);
+    diamondMat.emissive.setHex(0x26af5f);
+    ringMat1.color.setHex(0x2ed573);
+    pillarMat.color.setHex(0x2ed573);
+    parcelMesh.visible = true; // Show parcel carried in player's hands!
+  }
 
   if (taskTitleEl) taskTitleEl.textContent = current.title;
-  if (taskDescEl) taskDescEl.textContent = current.desc;
+  if (taskDescEl) taskDescEl.textContent = isPickup ? current.pickupDesc : current.dropoffDesc;
+  if (taskStepEl) {
+    taskStepEl.textContent = isPickup ? `📦 STAGE 1: PICKUP (${current.pickupLabel})` : `🎯 STAGE 2: DELIVER (${current.dropoffLabel})`;
+    taskStepEl.style.color = isPickup ? '#ff9f43' : '#2ed573';
+  }
+  if (taskRewardTagEl) taskRewardTagEl.textContent = `+₦${current.reward.toLocaleString()}`;
   if (walletBalanceEl) walletBalanceEl.textContent = `₦${playerEarnings.toLocaleString()}`;
 }
 updateMissionHUD();
 
-function completeCurrentMission() {
+function triggerStageTransition() {
   const current = missions[currentMissionIndex % missions.length];
-  playerEarnings += current.reward;
-  completedDeliveries++;
 
-  // Show Toast
-  if (toastEl) {
-    toastEl.textContent = `+₦${current.reward.toLocaleString()} EARNED! ${current.title.toUpperCase()} COMPLETE!`;
-    toastEl.style.display = 'block';
-    setTimeout(() => {
-      toastEl.style.display = 'none';
-    }, 3000);
+  if (currentStage === 'pickup') {
+    // Successfully collected item
+    currentStage = 'dropoff';
+    playPickupChime();
+
+    if (toastEl) {
+      toastEl.textContent = `📦 PACKAGE COLLECTED! NOW DELIVER TO ${current.dropoffLabel.toUpperCase()}`;
+      toastEl.style.display = 'block';
+      setTimeout(() => {
+        toastEl.style.display = 'none';
+      }, 2500);
+    }
+  } else {
+    // Successfully delivered!
+    playerEarnings += current.reward;
+    completedDeliveries++;
+    currentStage = 'pickup';
+    currentMissionIndex++;
+    playCashChime();
+
+    if (toastEl) {
+      toastEl.textContent = `+₦${current.reward.toLocaleString()} EARNED! ${current.title.toUpperCase()} COMPLETE!`;
+      toastEl.style.display = 'block';
+      setTimeout(() => {
+        toastEl.style.display = 'none';
+      }, 3500);
+    }
   }
 
-  currentMissionIndex++;
   updateMissionHUD();
 }
 
@@ -1252,23 +1426,28 @@ function animate() {
   // Update Mission Waypoint Beacon & Distance
   if (beaconDiamond) {
     beaconDiamond.rotation.y += dt * 2.5;
-    beaconDiamond.position.y = 1.8 + Math.sin(now * 0.004) * 0.25;
+    beaconDiamond.position.y = 1.9 + Math.sin(now * 0.005) * 0.25;
   }
-  if (beaconRing) {
-    const scale = 1.0 + Math.sin(now * 0.006) * 0.15;
-    beaconRing.scale.set(scale, scale, 1);
+  if (beaconRing1) {
+    const scale1 = 1.0 + Math.sin(now * 0.006) * 0.15;
+    beaconRing1.scale.set(scale1, scale1, 1);
+  }
+  if (beaconRing2) {
+    const scale2 = 1.0 + Math.cos(now * 0.006) * 0.18;
+    beaconRing2.scale.set(scale2, scale2, 1);
   }
 
   // Calculate distance to current mission objective
   const currentMission = missions[currentMissionIndex % missions.length];
-  const distToTarget = playerPos.distanceTo(currentMission.targetPos);
+  const targetPos = currentStage === 'pickup' ? currentMission.pickupPos : currentMission.dropoffPos;
+  const distToTarget = playerPos.distanceTo(targetPos);
   if (targetDistEl) {
-    targetDistEl.textContent = `${Math.round(distToTarget)}m away`;
+    targetDistEl.textContent = `📍 ${Math.round(distToTarget)}m`;
   }
 
   // Check objective arrival / completion (within 2.8m of beacon)
   if (!isDead && distToTarget < 2.8) {
-    completeCurrentMission();
+    triggerStageTransition();
   }
 
   renderer.render(scene, camera);
