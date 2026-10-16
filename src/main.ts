@@ -1057,8 +1057,35 @@ async function initIdentity() {
 if (!isMockMode()) initIdentity();
 
 // 6. Character Controls & Orbit Camera (Mouse Drag / Touch / Q & E)
+let isGameStarted = false;
+const introScreenEl = document.getElementById('intro-screen');
+const introStartBtn = document.getElementById('intro-start-btn');
+
+function startGame() {
+  if (isGameStarted) return;
+  isGameStarted = true;
+  lagosAudio.playIntroJingle();
+  setTimeout(() => lagosAudio.playDanfoHorn(), 350);
+  if (introScreenEl) {
+    introScreenEl.classList.add('fade-out');
+    setTimeout(() => {
+      introScreenEl.style.display = 'none';
+    }, 850);
+  }
+}
+
+introStartBtn?.addEventListener('click', () => {
+  startGame();
+});
+
 const keys: Record<string, boolean> = {};
-window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+window.addEventListener('keydown', (e) => {
+  if (!isGameStarted && (e.code === 'Space' || e.code === 'Enter')) {
+    startGame();
+    return;
+  }
+  keys[e.code] = true;
+});
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 // Orbit Camera Angles & Distances
@@ -1071,6 +1098,7 @@ let previousPointerX = 0;
 let previousPointerY = 0;
 
 window.addEventListener('pointerdown', (e) => {
+  if (!isGameStarted) return;
   // Ignore clicks on interactive UI if any
   isDraggingCamera = true;
   previousPointerX = e.clientX;

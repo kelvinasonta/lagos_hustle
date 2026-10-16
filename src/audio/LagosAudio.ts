@@ -28,6 +28,33 @@ class LagosAudio {
   }
 
   /**
+   * Energetic Lagos Intro fanfare / jingle
+   */
+  public playIntroJingle() {
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      // Vibrant afro-arcade chord progression: C, E, G, B, C5
+      const notes = [261.63, 329.63, 392.00, 523.25, 659.25];
+      notes.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        const start = t + idx * 0.08;
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.2, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.55);
+      });
+    } catch (e) {}
+  }
+
+  /**
    * Classic Lagos Danfo dual-tone horn ("Pee-Peeep!!")
    */
   public playDanfoHorn() {
