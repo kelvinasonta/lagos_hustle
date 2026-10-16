@@ -142,6 +142,177 @@ crossStreetZs.forEach((crossZ) => {
   scene.add(signPlate);
 });
 
+// Traffic Light System at Intersections
+export type TrafficPhase = 'avenue_green' | 'avenue_yellow' | 'cross_green' | 'cross_yellow';
+
+interface TrafficLightFixture {
+  group: THREE.Group;
+  facing: 'north' | 'south' | 'east' | 'west';
+  intersectionZ: number;
+  redMesh: THREE.Mesh;
+  yellowMesh: THREE.Mesh;
+  greenMesh: THREE.Mesh;
+}
+
+const trafficLights: TrafficLightFixture[] = [];
+
+// Shared materials for traffic light lenses
+const lightOffMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+const redOnMat = new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 2.2 });
+const yellowOnMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 2.2 });
+const greenOnMat = new THREE.MeshStandardMaterial({ color: 0x00ff66, emissive: 0x00dd44, emissiveIntensity: 2.2 });
+
+function createTrafficLightPost(
+  x: number,
+  z: number,
+  yaw: number,
+  facing: 'north' | 'south' | 'east' | 'west',
+  intersectionZ: number
+) {
+  const fixtureGroup = new THREE.Group();
+  fixtureGroup.position.set(x, 0, z);
+  fixtureGroup.rotation.y = yaw;
+
+  // Solid vertical mast pole (5.2m tall)
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.12, 5.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5, metalness: 0.4 })
+  );
+  mast.position.y = 2.6;
+  mast.castShadow = true;
+  fixtureGroup.add(mast);
+  registerObstacle(x, z, 0.4, 0.4);
+
+  // Cantilever overhead arm extending over lane
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.1, 2.4),
+    new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5, metalness: 0.4 })
+  );
+  arm.position.set(0, 4.9, 1.2);
+  arm.castShadow = true;
+  fixtureGroup.add(arm);
+
+  // Traffic light housing box (Black with sun hoods)
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.48, 1.3, 0.35),
+    new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 })
+  );
+  box.position.set(0, 4.7, 2.2);
+  box.castShadow = true;
+  fixtureGroup.add(box);
+
+  // Sun hoods (small visors above lenses)
+  for (let visorY of [5.12, 4.72, 4.32]) {
+    const visor = new THREE.Mesh(
+      new THREE.BoxGeometry(0.38, 0.05, 0.2),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 })
+    );
+    visor.position.set(0, visorY, 2.38);
+    fixtureGroup.add(visor);
+  }
+
+  // 3 Lenses: Red (top), Yellow (center), Green (bottom)
+  const lensGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
+  lensGeo.rotateX(Math.PI / 2);
+
+  const redMesh = new THREE.Mesh(lensGeo, lightOffMat.clone());
+  redMesh.position.set(0, 5.0, 2.36);
+  fixtureGroup.add(redMesh);
+
+  const yellowMesh = new THREE.Mesh(lensGeo, lightOffMat.clone());
+  yellowMesh.position.set(0, 4.7, 2.36);
+  fixtureGroup.add(yellowMesh);
+
+  const greenMesh = new THREE.Mesh(lensGeo, lightOffMat.clone());
+  greenMesh.position.set(0, 4.4, 2.36);
+  fixtureGroup.add(greenMesh);
+
+  scene.add(fixtureGroup);
+
+  trafficLights.push({
+    group: fixtureGroup,
+    facing,
+    intersectionZ,
+    redMesh,
+    yellowMesh,
+    greenMesh
+  });
+}
+
+// Build 4 traffic light posts around each intersection
+crossStreetZs.forEach((crossZ) => {
+  // 1. Southbound Avenue light (faces North, controls Southbound traffic coming from -Z towards +Z)
+  createTrafficLightPost(-9.5, crossZ - 11.0, 0, 'south', crossZ);
+
+  // 2. Northbound Avenue light (faces South, controls Northbound traffic coming from +Z towards -Z)
+  createTrafficLightPost(9.5, crossZ + 11.0, Math.PI, 'north', crossZ);
+
+  // 3. Eastbound Cross light (faces West, controls Eastbound traffic coming from -X towards +X)
+  createTrafficLightPost(-11.0, crossZ + 9.5, Math.PI / 2, 'east', crossZ);
+
+  // 4. Westbound Cross light (faces East, controls Westbound traffic coming from +X towards -X)
+  createTrafficLightPost(11.0, crossZ - 9.5, -Math.PI / 2, 'west', crossZ);
+});
+
+// Traffic Light Controller State
+// Phases:
+// 1. avenue_green: Avenue cars go, cross street stops (10 seconds)
+// 2. avenue_yellow: Avenue slows/stops, cross stays red (3 seconds)
+// 3. cross_green: Cross street cars go, avenue stops (10 seconds)
+// 4. cross_yellow: Cross street slows/stops, avenue stays red (3 seconds)
+let trafficPhase: TrafficPhase = 'avenue_green';
+let phaseTimer = 10.0;
+
+function updateTrafficLights(dt: number) {
+  phaseTimer -= dt;
+  if (phaseTimer <= 0) {
+    if (trafficPhase === 'avenue_green') {
+      trafficPhase = 'avenue_yellow';
+      phaseTimer = 3.0;
+    } else if (trafficPhase === 'avenue_yellow') {
+      trafficPhase = 'cross_green';
+      phaseTimer = 10.0;
+    } else if (trafficPhase === 'cross_green') {
+      trafficPhase = 'cross_yellow';
+      phaseTimer = 3.0;
+    } else if (trafficPhase === 'cross_yellow') {
+      trafficPhase = 'avenue_green';
+      phaseTimer = 10.0;
+    }
+  }
+
+  // Update lens visuals for each fixture
+  for (const tl of trafficLights) {
+    const isAvenue = tl.facing === 'north' || tl.facing === 'south';
+
+    let rActive = false;
+    let yActive = false;
+    let gActive = false;
+
+    if (isAvenue) {
+      if (trafficPhase === 'avenue_green') {
+        gActive = true;
+      } else if (trafficPhase === 'avenue_yellow') {
+        yActive = true;
+      } else {
+        rActive = true;
+      }
+    } else {
+      if (trafficPhase === 'cross_green') {
+        gActive = true;
+      } else if (trafficPhase === 'cross_yellow') {
+        yActive = true;
+      } else {
+        rActive = true;
+      }
+    }
+
+    tl.redMesh.material = rActive ? redOnMat : lightOffMat;
+    tl.yellowMesh.material = yActive ? yellowOnMat : lightOffMat;
+    tl.greenMesh.material = gActive ? greenOnMat : lightOffMat;
+  }
+}
+
 // 4. Bustling City Infrastructure: Buildings, Market Stalls, Billboards & Street Lamps
 
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -745,6 +916,9 @@ function animate() {
     fpsTimer = now;
   }
 
+  // Update dynamic traffic light cycles
+  updateTrafficLights(dt);
+
   // Walking Movement (W A S D) or Death ragdoll
   if (isDead) {
     deathTimer -= dt;
@@ -894,16 +1068,74 @@ function animate() {
       }
     }
 
-    // 2. Intersection Right-of-Way: Cross street vehicles yield if an avenue vehicle is passing
+    // 2. Traffic Light Compliance at Intersections
+    const isAvenueLightRedOrYellow = trafficPhase === 'cross_green' || trafficPhase === 'cross_yellow';
+    const isCrossLightRedOrYellow = trafficPhase === 'avenue_green' || trafficPhase === 'avenue_yellow';
+
+    for (const cz of crossStreetZs) {
+      if (v.axis === 'z') {
+        // Vehicle moving on Main Avenue
+        if (isAvenueLightRedOrYellow) {
+          if (v.direction === 'north') {
+            // Heading north (Z decreases). Stop line is at cz + 11.5
+            const distToStop = v.mesh.position.z - (cz + 11.5);
+            if (distToStop > 0 && distToStop < 16.0) {
+              if (distToStop < 3.0) {
+                targetSpeed = 0;
+              } else {
+                targetSpeed = Math.min(targetSpeed, v.baseSpeed * (distToStop / 16.0));
+              }
+            }
+          } else if (v.direction === 'south') {
+            // Heading south (Z increases). Stop line is at cz - 11.5
+            const distToStop = (cz - 11.5) - v.mesh.position.z;
+            if (distToStop > 0 && distToStop < 16.0) {
+              if (distToStop < 3.0) {
+                targetSpeed = 0;
+              } else {
+                targetSpeed = Math.min(targetSpeed, v.baseSpeed * (distToStop / 16.0));
+              }
+            }
+          }
+        }
+      } else if (v.axis === 'x' && Math.abs(v.laneCoord - cz) < 2.0) {
+        // Vehicle moving on Cross Street at this intersection
+        if (isCrossLightRedOrYellow) {
+          if (v.direction === 'east') {
+            // Heading east (X increases). Stop line is at X = -11.5
+            const distToStop = -11.5 - v.mesh.position.x;
+            if (distToStop > 0 && distToStop < 16.0) {
+              if (distToStop < 3.0) {
+                targetSpeed = 0;
+              } else {
+                targetSpeed = Math.min(targetSpeed, v.baseSpeed * (distToStop / 16.0));
+              }
+            }
+          } else if (v.direction === 'west') {
+            // Heading west (X decreases). Stop line is at X = 11.5
+            const distToStop = v.mesh.position.x - 11.5;
+            if (distToStop > 0 && distToStop < 16.0) {
+              if (distToStop < 3.0) {
+                targetSpeed = 0;
+              } else {
+                targetSpeed = Math.min(targetSpeed, v.baseSpeed * (distToStop / 16.0));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Intersection Right-of-Way Safety Guard (prevents collisions in case a vehicle clears late)
     if (v.axis === 'x') {
-      const approachingIntersection = Math.abs(v.mesh.position.x) < 16.0;
+      const approachingIntersection = Math.abs(v.mesh.position.x) < 14.0;
       if (approachingIntersection) {
         // Check if an avenue car is inside the intersection box
         const avenueVehicleInCross = trafficVehicles.some(
-          (av) => av.axis === 'z' && Math.abs(av.mesh.position.z - v.laneCoord) < 8.0 && Math.abs(av.mesh.position.x) < 7.0
+          (av) => av.axis === 'z' && Math.abs(av.mesh.position.z - v.laneCoord) < 8.0 && Math.abs(av.mesh.position.x) < 6.0
         );
         if (avenueVehicleInCross) {
-          targetSpeed = 0; // Yield right-of-way to main avenue traffic
+          targetSpeed = 0; // Yield right-of-way
         }
       }
     }
