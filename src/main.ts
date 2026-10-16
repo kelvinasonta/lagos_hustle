@@ -2,20 +2,22 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { askStartNg, redirectToSignIn, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
 import { createPrismTower } from './world/PrismTower';
+import { createDetailedHaussmannBuilding } from './world/DetailedBuilding';
+import { createAnimeFoliageTree } from './world/DetailedTree';
 import { RealisticNPCManager } from './character/RealisticCharacter';
 import { createToonMaterial } from './gfx/CelShader';
 
-async function initRealisticGame() {
+async function initStudioGame() {
   const container = document.getElementById('canvas-container')!;
   const statsEl = document.getElementById('spike-stats')!;
 
   // 1. Scene & Crisp Azure JRPG Sky
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#74b9ff');
-  scene.fog = new THREE.FogExp2('#dfe6e9', 0.0035);
+  scene.background = new THREE.Color('#70a1ff');
+  scene.fog = new THREE.FogExp2('#dfe4ea', 0.0032);
 
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 3.4, 7);
+  const camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 3.2, 7.5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -26,45 +28,51 @@ async function initRealisticGame() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Sunlight (Warm bright JRPG sunlight)
-  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x636e72, 1.3);
+  // Sunlight (Warm, sharp shadows)
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x747d8c, 1.4);
   scene.add(hemiLight);
 
-  const sunLight = new THREE.DirectionalLight(0xfffaed, 2.5);
-  sunLight.position.set(40, 80, 50);
+  const sunLight = new THREE.DirectionalLight(0xfffaed, 2.6);
+  sunLight.position.set(45, 85, 55);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
   sunLight.shadow.camera.near = 0.5;
   sunLight.shadow.camera.far = 300;
-  sunLight.shadow.camera.left = -50;
-  sunLight.shadow.camera.right = 50;
-  sunLight.shadow.camera.top = 50;
-  sunLight.shadow.camera.bottom = -50;
+  sunLight.shadow.camera.left = -55;
+  sunLight.shadow.camera.right = 55;
+  sunLight.shadow.camera.top = 55;
+  sunLight.shadow.camera.bottom = -55;
   scene.add(sunLight);
 
-  // 2. Texture Loading (PBR Textures with Mipmaps)
+  // 2. Texture Loading (High-res PBR Maps)
   const textureLoader = new THREE.TextureLoader();
+
   const cobbleTex = textureLoader.load('./assets/textures/cobblestone.webp');
   cobbleTex.wrapS = THREE.RepeatWrapping;
   cobbleTex.wrapT = THREE.RepeatWrapping;
-  cobbleTex.repeat.set(6, 40);
+  cobbleTex.repeat.set(8, 50);
 
   const stoneTex = textureLoader.load('./assets/textures/stone_facade.webp');
   stoneTex.wrapS = THREE.RepeatWrapping;
   stoneTex.wrapT = THREE.RepeatWrapping;
-  stoneTex.repeat.set(3, 4);
+  stoneTex.repeat.set(4, 5);
 
   const roofTex = textureLoader.load('./assets/textures/roof_slate.webp');
   roofTex.wrapS = THREE.RepeatWrapping;
   roofTex.wrapT = THREE.RepeatWrapping;
   roofTex.repeat.set(4, 4);
 
-  // Grand Cobblestone Boulevard Avenue
-  const avenueGeo = new THREE.PlaneGeometry(20, 280);
+  const shopWoodTex = textureLoader.load('./assets/textures/shop_wood.webp');
+  shopWoodTex.wrapS = THREE.RepeatWrapping;
+  shopWoodTex.wrapT = THREE.RepeatWrapping;
+  shopWoodTex.repeat.set(2, 2);
+
+  // Grand Cobblestone Central Avenue
+  const avenueGeo = new THREE.PlaneGeometry(22, 280);
   const avenueMat = new THREE.MeshStandardMaterial({
     map: cobbleTex,
-    roughness: 0.7,
+    roughness: 0.72,
     metalness: 0.1
   });
   const avenue = new THREE.Mesh(avenueGeo, avenueMat);
@@ -73,69 +81,55 @@ async function initRealisticGame() {
   scene.add(avenue);
 
   // Curbs
-  const curbMat = new THREE.MeshStandardMaterial({ color: 0x636e72, roughness: 0.8 });
-  const curbL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 280), curbMat);
-  curbL.position.set(-10.4, 0.12, 0);
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0x57606f, roughness: 0.8 });
+  const curbL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 280), curbMat);
+  curbL.position.set(-11.4, 0.14, 0);
   curbL.receiveShadow = true;
   scene.add(curbL);
 
   const curbR = curbL.clone();
-  curbR.position.x = 10.4;
+  curbR.position.x = 11.4;
   scene.add(curbR);
 
   // Sidewalks
-  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xb2bec3, roughness: 0.9 });
+  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xa4b0be, roughness: 0.85 });
   const sidewalkL = new THREE.Mesh(new THREE.PlaneGeometry(16, 280), sidewalkMat);
   sidewalkL.rotation.x = -Math.PI / 2;
-  sidewalkL.position.set(-18.8, 0.25, 0);
+  sidewalkL.position.set(-19.8, 0.28, 0);
   sidewalkL.receiveShadow = true;
   scene.add(sidewalkL);
 
   const sidewalkR = sidewalkL.clone();
-  sidewalkR.position.x = 18.8;
+  sidewalkR.position.x = 19.8;
   scene.add(sidewalkR);
 
-  // 3. Central Planters with Grass & Lush Trees (Matches Reference)
-  const treeTrunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 6, 12);
-  const trunkMat = createToonMaterial(0x574b32);
-  const foliageMat = createToonMaterial(0x27ae60);
-  const planterMat = new THREE.MeshStandardMaterial({ color: 0x718093, roughness: 0.8 });
+  // 3. Central Planters with Grass & Detailed Organic Trees
+  const planterMat = new THREE.MeshStandardMaterial({ color: 0x747d8c, roughness: 0.8 });
   const grassMat = new THREE.MeshStandardMaterial({ color: 0x44bd32, roughness: 0.9 });
 
   for (let z = -90; z <= 90; z += 30) {
-    const planterBox = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.35, 6.5), planterMat);
+    const planterBox = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.35, 6.8), planterMat);
     planterBox.position.set(0, 0.18, z);
     planterBox.receiveShadow = true;
     scene.add(planterBox);
 
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 6.1), grassMat);
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 6.4), grassMat);
     grass.rotation.x = -Math.PI / 2;
     grass.position.set(0, 0.36, z);
     scene.add(grass);
 
-    const tree = new THREE.Group();
+    // Fluffy Organic Tree
+    const tree = createAnimeFoliageTree();
     tree.position.set(0, 0, z);
-
-    const trunk = new THREE.Mesh(treeTrunkGeo, trunkMat);
-    trunk.position.y = 3.0;
-    trunk.castShadow = true;
-    tree.add(trunk);
-
-    const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 12), foliageMat);
-    foliage.scale.set(1.3, 1.4, 1.3);
-    foliage.position.y = 6.4;
-    foliage.castShadow = true;
-    tree.add(foliage);
-
     scene.add(tree);
   }
 
   // Victorian Streetlamps
-  const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, metalness: 0.8, roughness: 0.3 });
+  const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0x2f3542, metalness: 0.8, roughness: 0.3 });
   const lampGlassMat = new THREE.MeshStandardMaterial({ color: 0xfffae6, emissive: 0xfffae6, emissiveIntensity: 1.0 });
 
   for (let z = -100; z <= 100; z += 25) {
-    for (const side of [-11.5, 11.5]) {
+    for (const side of [-12.5, 12.5]) {
       const lamp = new THREE.Group();
       lamp.position.set(side, 0, z);
 
@@ -152,94 +146,37 @@ async function initRealisticGame() {
     }
   }
 
-  // 4. Textured Haussmann Buildings with Boutique Storefronts & Blue Shutters
-  const buildingMat = new THREE.MeshStandardMaterial({
-    map: stoneTex,
-    roughness: 0.8,
-    metalness: 0.05
-  });
-
-  const roofMat = new THREE.MeshStandardMaterial({
-    map: roofTex,
-    roughness: 0.6
-  });
-
-  const windowGlass = new THREE.MeshStandardMaterial({
-    color: 0x225588,
-    roughness: 0.1,
-    metalness: 0.9
-  });
-
-  const shopMat = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.6 });
-  const shutterMat = createToonMaterial(0x3867d6);
-  const bannerMat = createToonMaterial(0x2ed573);
-
+  // 4. Detailed Haussmann Buildings Flanking Boulevard
   for (let z = -100; z <= 100; z += 24) {
-    for (const side of [-1, 1]) {
-      const bGroup = new THREE.Group();
-      bGroup.position.set(side * 22, 0, z);
+    // Left Side Building
+    const bLeft = createDetailedHaussmannBuilding({
+      x: -24,
+      z,
+      width: 22,
+      height: 25,
+      depth: 22,
+      wallTexture: stoneTex,
+      roofTexture: roofTex,
+      shopWoodTexture: shopWoodTex
+    });
+    scene.add(bLeft);
 
-      // Core Building
-      const core = new THREE.Mesh(new THREE.BoxGeometry(20, 24, 20), buildingMat);
-      core.position.y = 12;
-      core.castShadow = true;
-      core.receiveShadow = true;
-      bGroup.add(core);
-
-      // Ground Floor Boutique Shop
-      const shop = new THREE.Mesh(new THREE.BoxGeometry(20.4, 4.5, 20.4), shopMat);
-      shop.position.y = 2.25;
-      shop.castShadow = true;
-      bGroup.add(shop);
-
-      // Shop Window Glass
-      const shopWin = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.6), windowGlass);
-      shopWin.position.set(0, 2.2, -side * 10.25);
-      if (side === 1) shopWin.rotation.y = Math.PI;
-      bGroup.add(shopWin);
-
-      // Red Awning Canopy
-      const awning = new THREE.Mesh(new THREE.BoxGeometry(15, 0.15, 2.2), createToonMaterial(0xeb4d4b));
-      awning.position.set(0, 3.8, -side * 11.2);
-      bGroup.add(awning);
-
-      // Hanging Vertical Green Banner (from reference image)
-      const banner = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 3.4), bannerMat);
-      banner.position.set(-side * 8, 8, -side * 10.3);
-      if (side === 1) banner.rotation.y = Math.PI;
-      bGroup.add(banner);
-
-      // Rows of Windows with Blue Shutters
-      for (let floor = 1; floor <= 4; floor++) {
-        const y = floor * 4.5 + 2.5;
-        for (let col = -2; col <= 2; col++) {
-          const x = col * 3.4;
-          const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.0), windowGlass);
-          win.position.set(x, y, -side * 10.05);
-          if (side === 1) win.rotation.y = Math.PI;
-          bGroup.add(win);
-
-          // Blue Shutters
-          const shutL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.08), shutterMat);
-          shutL.position.set(x - 0.9, y, -side * 10.08);
-          bGroup.add(shutL);
-
-          const shutR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.08), shutterMat);
-          shutR.position.set(x + 0.9, y, -side * 10.08);
-          bGroup.add(shutR);
-        }
-      }
-
-      // Mansard Roof
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(20.2, 3.5, 20.2), roofMat);
-      roof.position.y = 25.75;
-      bGroup.add(roof);
-
-      scene.add(bGroup);
-    }
+    // Right Side Building
+    const bRight = createDetailedHaussmannBuilding({
+      x: 24,
+      z,
+      width: 22,
+      height: 25,
+      depth: 22,
+      rotationY: Math.PI,
+      wallTexture: stoneTex,
+      roofTexture: roofTex,
+      shopWoodTexture: shopWoodTex
+    });
+    scene.add(bRight);
   }
 
-  // 5. Monumental Prism Tower in the Far Vista
+  // 5. Monumental Prism Tower in Far Vista
   const prismTower = createPrismTower();
   prismTower.position.set(0, 0, -135);
   scene.add(prismTower);
@@ -250,11 +187,10 @@ async function initRealisticGame() {
   const groundBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0));
   world.createCollider(RAPIER.ColliderDesc.cuboid(80, 0.1, 150), groundBody);
 
-  // 7. Realistic NPC Manager & Characters
+  // 7. Realistic NPCs (Butler, Stroller, Tourist, Cafe Owner)
   const npcManager = new RealisticNPCManager();
   scene.add(npcManager.group);
 
-  // Add Butler in Suit (Pierre)
   npcManager.createCharacter(
     'Pierre',
     'Grand Hotel Concierge',
@@ -263,7 +199,6 @@ async function initRealisticGame() {
     { top: 0x1e272e, pants: 0x2d3436, skin: 0xf5cd79, hair: 0x1e272e, cap: 0x1e272e }
   );
 
-  // Walking Stroller (Camille)
   npcManager.createCharacter(
     'Camille',
     'City Stroller',
@@ -273,7 +208,6 @@ async function initRealisticGame() {
     new THREE.Vector3(4.5, 0, -35)
   );
 
-  // Walking Tourist (Luc)
   npcManager.createCharacter(
     'Luc',
     'Photographer',
@@ -283,7 +217,6 @@ async function initRealisticGame() {
     new THREE.Vector3(-4.8, 0, 15)
   );
 
-  // Cafe Owner (Sophie)
   npcManager.createCharacter(
     'Sophie',
     'Patisserie Chef',
@@ -292,7 +225,7 @@ async function initRealisticGame() {
     { top: 0xe84118, pants: 0x2f3542, skin: 0xf19066, hair: 0xfbc531 }
   );
 
-  // 8. Player Character (Stylized Trainer matching reference with Backpack & Cap)
+  // 8. Player Character (Equipped with Trainer Jacket, Cap, and Red Waist Bag)
   let currentUser: StartNgUser = {
     id: 1,
     name: 'Kelvin',
@@ -314,7 +247,6 @@ async function initRealisticGame() {
   playerGroup.position.set(0, 0, 18);
   scene.add(playerGroup);
 
-  // Player Model (Cel-shaded with cap and red backpack)
   const playerSkinMat = createToonMaterial(0xf8c291);
   const playerJacketMat = createToonMaterial(0x2d3436);
   const playerPantsMat = createToonMaterial(0x1e272e);
@@ -428,7 +360,7 @@ async function initRealisticGame() {
     dialogueBox.style.left = '50%';
     dialogueBox.style.transform = 'translateX(-50%)';
     dialogueBox.style.background = 'rgba(24, 27, 34, 0.94)';
-    dialogueBox.style.border = '2px solid #74b9ff';
+    dialogueBox.style.border = '2px solid #70a1ff';
     dialogueBox.style.borderRadius = '16px';
     dialogueBox.style.padding = '16px 26px';
     dialogueBox.style.maxWidth = '620px';
@@ -491,7 +423,7 @@ async function initRealisticGame() {
       playerPos.z += (moveZ / norm) * moveSpeed * dt;
 
       // Stay within avenue
-      playerPos.x = Math.max(-9.5, Math.min(9.5, playerPos.x));
+      playerPos.x = Math.max(-10.0, Math.min(10.0, playerPos.x));
       playerPos.z = Math.max(-115, Math.min(100, playerPos.z));
 
       // Player walk animation
@@ -523,7 +455,7 @@ async function initRealisticGame() {
       if (nearest) {
         dialogueBox.style.display = 'block';
         dialogueBox.innerHTML = `
-          <div style="font-size:12px; color:#74b9ff; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${nearest.name} • ${nearest.role}</div>
+          <div style="font-size:12px; color:#70a1ff; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${nearest.name} • ${nearest.role}</div>
           <div style="font-size:15px; line-height:1.5; color:#f1f2f6;">"${nearest.dialogue}"</div>
         `;
       } else {
@@ -544,7 +476,7 @@ async function initRealisticGame() {
 
     // Update UI Stats
     statsEl.innerHTML = `
-      <b style="color:#74b9ff">CENTRAL AVENUE — REALISTIC JRPG CITY</b><br/>
+      <b style="color:#70a1ff">CENTRAL AVENUE — AAA STUDIO JRPG CITY</b><br/>
       FPS: <span style="color:#2ed573">${fps}</span> | Walking NPCs: <b>${npcManager.npcs.length}</b><br/>
       Controls: <b>WASD / Arrow Keys</b> to walk & talk with NPCs<br/>
       Landmark: <b>Prism Tower</b> straight down the boulevard
@@ -560,4 +492,4 @@ async function initRealisticGame() {
   });
 }
 
-initRealisticGame().catch(console.error);
+initStudioGame().catch(console.error);
