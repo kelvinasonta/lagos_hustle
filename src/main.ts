@@ -32,45 +32,133 @@ sunLight.shadow.mapSize.width = 1024;
 sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
-// 3. Flat Road (#2E2E38 Asphalt from Art Direction Sheet)
-const roadGeo = new THREE.PlaneGeometry(20, 400);
+// 3. Road Network: Main Avenue + Connecting Cross Streets
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x2e2e38, roughness: 0.8 });
-const road = new THREE.Mesh(roadGeo, roadMat);
-road.rotation.x = -Math.PI / 2;
-road.receiveShadow = true;
-scene.add(road);
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f }); // Danfo Yellow
+const zebraMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee }); // Pedestrian crosswalk
 
-// Road Center line (Danfo Yellow #F7BF1F)
-const lineGeo = new THREE.PlaneGeometry(0.3, 400);
-const lineMat = new THREE.MeshBasicMaterial({ color: 0xf7bf1f });
-const centerLine = new THREE.Mesh(lineGeo, lineMat);
-centerLine.rotation.x = -Math.PI / 2;
-centerLine.position.y = 0.01;
-scene.add(centerLine);
+// Main Avenue (Z-axis, width 20m, length 400m)
+const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 400), roadMat);
+mainRoad.rotation.x = -Math.PI / 2;
+mainRoad.receiveShadow = true;
+scene.add(mainRoad);
 
-// 4. Simple Grey Buildings on both sides (#BDB8AE Concrete from Palette)
+// Main road yellow centerline
+const mainCenterLine = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 400), lineMat);
+mainCenterLine.rotation.x = -Math.PI / 2;
+mainCenterLine.position.y = 0.01;
+scene.add(mainCenterLine);
+
+// Connecting cross streets (Intersections at Z = -80, Z = 0, Z = 80)
+const crossStreetZs = [-80, 0, 80];
+crossStreetZs.forEach((crossZ) => {
+  // Cross street (X-axis, width 16m, length 300m)
+  const crossRoad = new THREE.Mesh(new THREE.PlaneGeometry(300, 16), roadMat);
+  crossRoad.rotation.x = -Math.PI / 2;
+  crossRoad.position.set(0, 0.005, crossZ);
+  crossRoad.receiveShadow = true;
+  scene.add(crossRoad);
+
+  // Yellow centerline for cross street (leaving intersection center clean)
+  const crossLineEast = new THREE.Mesh(new THREE.PlaneGeometry(140, 0.3), lineMat);
+  crossLineEast.rotation.x = -Math.PI / 2;
+  crossLineEast.position.set(80, 0.012, crossZ);
+  scene.add(crossLineEast);
+
+  const crossLineWest = new THREE.Mesh(new THREE.PlaneGeometry(140, 0.3), lineMat);
+  crossLineWest.rotation.x = -Math.PI / 2;
+  crossLineWest.position.set(-80, 0.012, crossZ);
+  scene.add(crossLineWest);
+
+  // Zebra crossings on North & South entries of intersection
+  for (let zOffset of [-10.5, 10.5]) {
+    for (let stripe = -8; stripe <= 8; stripe += 1.6) {
+      const zebra = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 2.5), zebraMat);
+      zebra.rotation.x = -Math.PI / 2;
+      zebra.position.set(stripe, 0.015, crossZ + zOffset);
+      scene.add(zebra);
+    }
+  }
+
+  // Street Name Signs / Boards at Corners (e.g. Marina Rd, Broad St, Ojuelegba Way)
+  const signPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 4.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x444444 })
+  );
+  signPole.position.set(11.5, 2.1, crossZ + 9.5);
+  signPole.castShadow = true;
+  scene.add(signPole);
+
+  const signPlate = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 0.6, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x1b5e20, roughness: 0.4 }) // Green Lagos street sign
+  );
+  signPlate.position.set(11.5, 3.8, crossZ + 9.5);
+  signPlate.castShadow = true;
+  scene.add(signPlate);
+});
+
+// 4. City Buildings positioned along street blocks (avoiding intersection gaps)
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
 const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8e, roughness: 0.7 });
+const commercialMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, roughness: 0.6 });
 
-for (let i = 0; i < 24; i++) {
-  const h = 10 + (i * 7) % 25;
-  const w = 12;
-  const d = 14;
+// Helper to check if a Z position is near any intersection
+function isNearIntersection(z: number): boolean {
+  return crossStreetZs.some((cz) => Math.abs(z - cz) < 14);
+}
 
-  const bL = new THREE.Mesh(buildingGeo, buildingMat);
+// Buildings along Main Avenue
+for (let i = 0; i < 28; i++) {
+  const zPos = -130 + i * 10;
+  if (isNearIntersection(zPos)) continue; // Keep intersection corners clear for connecting roads
+
+  const h = 12 + ((i * 13) % 24);
+  const w = 11;
+  const d = 8.5;
+  const mat = i % 2 === 0 ? buildingMat : commercialMat;
+
+  // West side buildings
+  const bL = new THREE.Mesh(buildingGeo, mat);
   bL.scale.set(w, h, d);
-  bL.position.set(-18, h / 2, (i - 12) * 16);
+  bL.position.set(-18, h / 2, zPos);
   bL.castShadow = true;
   bL.receiveShadow = true;
   scene.add(bL);
 
-  const bR = new THREE.Mesh(buildingGeo, buildingMat);
+  // East side buildings
+  const bR = new THREE.Mesh(buildingGeo, mat);
   bR.scale.set(w, h, d);
-  bR.position.set(18, h / 2, (i - 12) * 16);
+  bR.position.set(18, h / 2, zPos);
   bR.castShadow = true;
   bR.receiveShadow = true;
   scene.add(bR);
 }
+
+// Buildings flanking the connecting cross streets
+crossStreetZs.forEach((cz) => {
+  for (let xStep of [26, 42, 58, -26, -42, -58]) {
+    const h = 10 + (Math.abs(xStep) * 3) % 18;
+    const w = 12;
+    const d = 10;
+
+    // North side of cross street
+    const bNorth = new THREE.Mesh(buildingGeo, commercialMat);
+    bNorth.scale.set(w, h, d);
+    bNorth.position.set(xStep, h / 2, cz + 15);
+    bNorth.castShadow = true;
+    bNorth.receiveShadow = true;
+    scene.add(bNorth);
+
+    // South side of cross street
+    const bSouth = new THREE.Mesh(buildingGeo, buildingMat);
+    bSouth.scale.set(w, h, d);
+    bSouth.position.set(xStep, h / 2, cz - 15);
+    bSouth.castShadow = true;
+    bSouth.receiveShadow = true;
+    scene.add(bSouth);
+  }
+});
 
 // 5. 3D Person Character (Generated from start.ng character style)
 let currentUser: StartNgUser = {
@@ -169,8 +257,14 @@ function animate() {
     playerPos.x += (moveX / norm) * moveSpeed * dt;
     playerPos.z += (moveZ / norm) * moveSpeed * dt;
 
-    // Clamp inside road boundaries
-    playerPos.x = Math.max(-9.0, Math.min(9.0, playerPos.x));
+    // Check boundaries: on main avenue (-9 to 9) OR on cross streets (near cross street Z, X between -145 and 145)
+    const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
+    if (!onCrossStreet) {
+      playerPos.x = Math.max(-9.0, Math.min(9.0, playerPos.x));
+    } else {
+      playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
+    }
+    playerPos.z = Math.max(-180.0, Math.min(180.0, playerPos.z));
   }
 
   playerGroup.position.copy(playerPos);
@@ -180,9 +274,9 @@ function animate() {
     avatar.updateAnimation(dt, isMoving, 1.2);
   }
 
-  // Third-person chase camera follow
+  // Smooth Third-person chase camera follow relative to player's position
   const targetCamPos = new THREE.Vector3(
-    playerPos.x * 0.4,
+    playerPos.x,
     playerPos.y + 3.8,
     playerPos.z + 7.5
   );
