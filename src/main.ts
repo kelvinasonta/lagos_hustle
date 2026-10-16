@@ -313,15 +313,37 @@ function updateTrafficLights(dt: number) {
   }
 }
 
-// 4. Bustling City Infrastructure: Buildings, Market Stalls, Billboards & Street Lamps
-
+// 4. Bustling City Infrastructure: Realistic Lagos Urban Architecture & Storefronts
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
-const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8e, roughness: 0.7 });
-const commercialMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, roughness: 0.6 });
-const brickMat = new THREE.MeshStandardMaterial({ color: 0xb5502d, roughness: 0.85 }); // Laterite red / brick
-const glassWindowMat = new THREE.MeshStandardMaterial({ color: 0x22313f, roughness: 0.2, metalness: 0.8 });
 
-// Billboard / Signboard vibrant Lagos colors
+// Curated architectural material palette
+const concreteMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.8 }); // Modern white/grey plaster
+const ochreMat = new THREE.MeshStandardMaterial({ color: 0xe1b12c, roughness: 0.85 }); // Warm ochre Nigerian stucco
+const brickMat = new THREE.MeshStandardMaterial({ color: 0xb33927, roughness: 0.9 }); // Red laterite brick
+const tealCommercialMat = new THREE.MeshStandardMaterial({ color: 0x1e3799, roughness: 0.6 }); // Banking corporate blue
+const bankMat = new THREE.MeshStandardMaterial({ color: 0x4a69bd, roughness: 0.4, metalness: 0.2 });
+const warmSandMat = new THREE.MeshStandardMaterial({ color: 0xf8c291, roughness: 0.8 }); // Tropical Lagos sand paint
+
+const buildingMaterials = [concreteMat, ochreMat, brickMat, tealCommercialMat, bankMat, warmSandMat];
+
+// Window glass & trim materials
+const glassWindowMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.15, metalness: 0.85 });
+const glowingWindowMat = new THREE.MeshStandardMaterial({
+  color: 0xfffa65,
+  emissive: 0xffd32a,
+  emissiveIntensity: 0.6,
+  roughness: 0.3
+});
+const acUnitMat = new THREE.MeshStandardMaterial({ color: 0xd2dae2, roughness: 0.5 });
+const waterTankMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.4 }); // Black GeePee plastic water tank
+const awningMats = [
+  new THREE.MeshStandardMaterial({ color: 0xeb2f06, roughness: 0.6 }), // Red canvas
+  new THREE.MeshStandardMaterial({ color: 0x10ac84, roughness: 0.6 }), // Green canvas
+  new THREE.MeshStandardMaterial({ color: 0xfa8231, roughness: 0.6 }), // Orange canvas
+  new THREE.MeshStandardMaterial({ color: 0x2e86de, roughness: 0.6 })  // Blue canvas
+];
+
+// Billboard / Signboard vibrant Lagos brand colors
 const billboardMats = [
   new THREE.MeshBasicMaterial({ color: 0xe74c3c }), // Airtel / Coca-Cola red
   new THREE.MeshBasicMaterial({ color: 0xf39c12 }), // MTN yellow
@@ -334,52 +356,142 @@ function isNearIntersection(z: number): boolean {
   return crossStreetZs.some((cz) => Math.abs(z - cz) < 14);
 }
 
-// Buildings along Main Avenue with window rows and rooftop billboards
+// Function to construct a rich Lagos building with architectural details
+function createDetailedBuilding(x: number, z: number, w: number, h: number, d: number, facingSide: 'west' | 'east') {
+  const bGroup = new THREE.Group();
+  const matIndex = Math.floor(Math.abs(z * 7 + x * 3)) % buildingMaterials.length;
+  const primaryMat = buildingMaterials[matIndex];
+
+  // 1. Main structure block
+  const mainBlock = new THREE.Mesh(buildingGeo, primaryMat);
+  mainBlock.scale.set(w, h, d);
+  mainBlock.position.set(0, h / 2, 0);
+  mainBlock.castShadow = true;
+  mainBlock.receiveShadow = true;
+  bGroup.add(mainBlock);
+
+  // 2. Decorative parapet roof rim (Lagos flat roof style)
+  const parapetH = 0.6;
+  const parapet = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.3, parapetH, d + 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x2f3542, roughness: 0.7 })
+  );
+  parapet.position.set(0, h + parapetH / 2, 0);
+  parapet.castShadow = true;
+  bGroup.add(parapet);
+
+  // 3. Ground Floor Storefront Glass & Entrance
+  const streetXOffset = facingSide === 'west' ? (w / 2 + 0.05) : -(w / 2 + 0.05);
+  const rotationY = facingSide === 'west' ? Math.PI / 2 : -Math.PI / 2;
+
+  const shopGlass = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.75, 3.4), glassWindowMat);
+  shopGlass.position.set(streetXOffset, 2.0, 0);
+  shopGlass.rotation.y = rotationY;
+  bGroup.add(shopGlass);
+
+  // Ground floor fabric storefront awning (sheltering sidewalk from sun/rain)
+  const awningMat = awningMats[Math.floor(Math.abs(z + x)) % awningMats.length];
+  const awning = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.12, w * 0.8),
+    awningMat
+  );
+  awning.rotation.z = facingSide === 'west' ? 0.35 : -0.35;
+  awning.position.set(facingSide === 'west' ? (w / 2 + 0.5) : -(w / 2 + 0.5), 3.8, 0);
+  awning.castShadow = true;
+  bGroup.add(awning);
+
+  // 4. Upper Floors: Multi-Story Window Grids & Balconies
+  const numFloors = Math.floor((h - 4.5) / 3.0);
+  for (let f = 0; f < numFloors; f++) {
+    const floorY = 5.2 + f * 3.0;
+
+    // Window bays along the street facade
+    for (let bay = -2; bay <= 2; bay++) {
+      if (bay === 0 && h > 20) continue; // Architectural pillar gap on taller towers
+      const bayZ = bay * 1.5;
+      const isLit = (bay + f + Math.abs(z)) % 3 === 0;
+
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.0, 1.4),
+        isLit ? glowingWindowMat : glassWindowMat
+      );
+      win.position.set(streetXOffset, floorY, bayZ);
+      win.rotation.y = rotationY;
+      bGroup.add(win);
+
+      // Window sill / sun shade ledge (brise-soleil tropical architecture)
+      const sill = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.08, 1.2),
+        concreteMat
+      );
+      sill.position.set(streetXOffset + (facingSide === 'west' ? 0.1 : -0.1), floorY - 0.72, bayZ);
+      bGroup.add(sill);
+
+      // Air Conditioner Condenser Box on select windows (Ubiquitous Lagos street detail)
+      if ((f + bay) % 4 === 1) {
+        const ac = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.4, 0.65),
+          acUnitMat
+        );
+        ac.position.set(
+          streetXOffset + (facingSide === 'west' ? 0.22 : -0.22),
+          floorY - 0.45,
+          bayZ + 0.35
+        );
+        ac.castShadow = true;
+        bGroup.add(ac);
+      }
+    }
+  }
+
+  // 5. Rooftop Equipment: GeePee Black Plastic Water Tanks & TV Antennas
+  const tank = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.85, 0.85, 1.6, 12),
+    waterTankMat
+  );
+  tank.position.set((facingSide === 'west' ? -1 : 1) * (w * 0.2), h + 0.8, -d * 0.2);
+  tank.castShadow = true;
+  bGroup.add(tank);
+
+  // Communications / Cell antenna mast on select tall roofs
+  if (h > 24) {
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.08, 5.0, 6),
+      new THREE.MeshStandardMaterial({ color: 0x95a5a6, metalness: 0.8 })
+    );
+    mast.position.set(0, h + 2.5, d * 0.2);
+    mast.castShadow = true;
+    bGroup.add(mast);
+  }
+
+  // 6. Rooftop Brand Billboards on prime avenue facades
+  if (Math.abs(z) % 24 < 10 && h > 16) {
+    const bbMat = billboardMats[Math.floor(Math.abs(z)) % billboardMats.length];
+    const bbFrame = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 6.8), bbMat);
+    bbFrame.position.set(facingSide === 'west' ? (w / 2 - 0.5) : -(w / 2 - 0.5), h + 1.8, 0);
+    bbFrame.castShadow = true;
+    bGroup.add(bbFrame);
+  }
+
+  bGroup.position.set(x, 0, z);
+  scene.add(bGroup);
+  registerObstacle(x, z, w, d);
+}
+
+// Generate buildings along Main Avenue (West and East street walls)
 for (let i = 0; i < 28; i++) {
   const zPos = -130 + i * 10;
-  if (isNearIntersection(zPos)) continue; // Keep intersection corners clear for connecting roads
+  if (isNearIntersection(zPos)) continue; // Keep intersection corners open
 
   const h = 14 + ((i * 13) % 22);
   const w = 11;
   const d = 8.5;
-  const mat = i % 3 === 0 ? brickMat : i % 2 === 0 ? buildingMat : commercialMat;
 
-  // West side building
-  const bL = new THREE.Mesh(buildingGeo, mat);
-  bL.scale.set(w, h, d);
-  bL.position.set(-18, h / 2, zPos);
-  bL.castShadow = true;
-  bL.receiveShadow = true;
-  scene.add(bL);
-  registerObstacle(-18, zPos, w, d);
+  // West side building (facing east toward avenue)
+  createDetailedBuilding(-18, zPos, w, h, d, 'west');
 
-  // Storefront glass window on ground floor
-  const shopWindowL = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
-  shopWindowL.rotation.y = Math.PI / 2;
-  shopWindowL.position.set(-12.45, 2.0, zPos);
-  scene.add(shopWindowL);
-
-  // East side building
-  const bR = new THREE.Mesh(buildingGeo, mat);
-  bR.scale.set(w, h, d);
-  bR.position.set(18, h / 2, zPos);
-  bR.castShadow = true;
-  bR.receiveShadow = true;
-  scene.add(bR);
-  registerObstacle(18, zPos, w, d);
-
-  const shopWindowR = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
-  shopWindowR.rotation.y = -Math.PI / 2;
-  shopWindowR.position.set(12.45, 2.0, zPos);
-  scene.add(shopWindowR);
-
-  // Rooftop Billboards on selected buildings
-  if (i % 4 === 1) {
-    const bbFrame = new THREE.Mesh(new THREE.BoxGeometry(6.4, 3.0, 0.3), billboardMats[i % billboardMats.length]);
-    bbFrame.position.set(18, h + 1.8, zPos);
-    bbFrame.castShadow = true;
-    scene.add(bbFrame);
-  }
+  // East side building (facing west toward avenue)
+  createDetailedBuilding(18, zPos, w, h, d, 'east');
 }
 
 // Street Light Poles along Sidewalks
@@ -517,23 +629,77 @@ crossStreetZs.forEach((cz) => {
     const h = 10 + (Math.abs(xStep) * 3) % 18;
     const w = 12;
     const d = 10;
+    const matNorth = buildingMaterials[Math.abs(xStep + cz) % buildingMaterials.length];
+    const matSouth = buildingMaterials[(Math.abs(xStep - cz) + 1) % buildingMaterials.length];
 
-    // North side of cross street
-    const bNorth = new THREE.Mesh(buildingGeo, commercialMat);
+    // North side of cross street (facing south toward cross road)
+    const bNorthGroup = new THREE.Group();
+    const bNorth = new THREE.Mesh(buildingGeo, matNorth);
     bNorth.scale.set(w, h, d);
-    bNorth.position.set(xStep, h / 2, cz + 15);
+    bNorth.position.set(0, h / 2, 0);
     bNorth.castShadow = true;
     bNorth.receiveShadow = true;
-    scene.add(bNorth);
+    bNorthGroup.add(bNorth);
+
+    // North ground shop window
+    const shopWinN = new THREE.Mesh(new THREE.PlaneGeometry(8, 2.8), glassWindowMat);
+    shopWinN.position.set(0, 1.8, -d / 2 - 0.05);
+    bNorthGroup.add(shopWinN);
+
+    // North upper windows
+    const numFloorsN = Math.floor((h - 4) / 3.0);
+    for (let f = 0; f < numFloorsN; f++) {
+      for (let bay = -2; bay <= 2; bay++) {
+        const isLit = (f + bay) % 2 === 0;
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.2), isLit ? glowingWindowMat : glassWindowMat);
+        win.position.set(bay * 2.0, 4.5 + f * 2.8, -d / 2 - 0.05);
+        bNorthGroup.add(win);
+      }
+    }
+
+    // Rooftop water tank
+    const tankN = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.4, 8), waterTankMat);
+    tankN.position.set(2.5, h + 0.7, 0);
+    bNorthGroup.add(tankN);
+
+    bNorthGroup.position.set(xStep, 0, cz + 15);
+    scene.add(bNorthGroup);
     registerObstacle(xStep, cz + 15, w, d);
 
-    // South side of cross street
-    const bSouth = new THREE.Mesh(buildingGeo, buildingMat);
+    // South side of cross street (facing north toward cross road)
+    const bSouthGroup = new THREE.Group();
+    const bSouth = new THREE.Mesh(buildingGeo, matSouth);
     bSouth.scale.set(w, h, d);
-    bSouth.position.set(xStep, h / 2, cz - 15);
+    bSouth.position.set(0, h / 2, 0);
     bSouth.castShadow = true;
     bSouth.receiveShadow = true;
-    scene.add(bSouth);
+    bSouthGroup.add(bSouth);
+
+    // South ground shop window
+    const shopWinS = new THREE.Mesh(new THREE.PlaneGeometry(8, 2.8), glassWindowMat);
+    shopWinS.position.set(0, 1.8, d / 2 + 0.05);
+    shopWinS.rotation.y = Math.PI;
+    bSouthGroup.add(shopWinS);
+
+    // South upper windows
+    const numFloorsS = Math.floor((h - 4) / 3.0);
+    for (let f = 0; f < numFloorsS; f++) {
+      for (let bay = -2; bay <= 2; bay++) {
+        const isLit = (f + bay + 1) % 2 === 0;
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.2), isLit ? glowingWindowMat : glassWindowMat);
+        win.position.set(bay * 2.0, 4.5 + f * 2.8, d / 2 + 0.05);
+        win.rotation.y = Math.PI;
+        bSouthGroup.add(win);
+      }
+    }
+
+    // Rooftop water tank
+    const tankS = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.4, 8), waterTankMat);
+    tankS.position.set(-2.5, h + 0.7, 0);
+    bSouthGroup.add(tankS);
+
+    bSouthGroup.position.set(xStep, 0, cz - 15);
+    scene.add(bSouthGroup);
     registerObstacle(xStep, cz - 15, w, d);
   }
 });
