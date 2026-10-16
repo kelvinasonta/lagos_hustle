@@ -17,7 +17,7 @@ async function initStudioGame() {
   scene.fog = new THREE.FogExp2('#dfe4ea', 0.0032);
 
   const camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 3.2, 7.5);
+  camera.position.set(0, 4.0, 68);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -244,7 +244,7 @@ async function initStudioGame() {
   };
 
   const playerGroup = new THREE.Group();
-  playerGroup.position.set(0, 0, 18);
+  playerGroup.position.set(0, 0, 60);
   scene.add(playerGroup);
 
   const playerSkinMat = createToonMaterial(0xf8c291);
@@ -379,7 +379,7 @@ async function initStudioGame() {
   window.addEventListener('keydown', (e) => { keys[e.code] = true; });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-  let playerPos = new THREE.Vector3(0, 0, 18);
+  let playerPos = new THREE.Vector3(0, 0, 60);
   let playerYaw = Math.PI;
   const moveSpeed = 8.5;
   let animTime = 0;
