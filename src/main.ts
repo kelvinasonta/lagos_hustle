@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AvatarGenerator } from './character/AvatarGenerator';
-import { askStartNg, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
+import { askStartNg, WhoAmIReply, StartNgUser } from './net/startng';
 import { createVehicle, VehicleType } from './vehicles/DanfoGenerator';
 import { lagosAudio } from './audio/LagosAudio';
 
@@ -1043,18 +1043,37 @@ function rebuildAvatar(user: StartNgUser) {
 }
 rebuildAvatar(currentUser);
 
-// Fetch start.ng identity if available
+// Fetch start.ng identity & display player profile card
 async function initIdentity() {
-  const reply = await askStartNg<WhoAmIReply>({ type: 'startng:whoami' }, 'startng:user', 2000);
-  if (reply) {
-    const p = reply.user ?? reply.guest;
-    if (p) {
-      currentUser = p;
-      rebuildAvatar(p);
+  const reply = await askStartNg<WhoAmIReply>({ type: 'startng:whoami' }, 'startng:user', 4000);
+  const p = reply?.user ?? reply?.guest;
+  if (p) {
+    currentUser = p;
+    rebuildAvatar(p);
+    const cardEl = document.getElementById('player-card');
+    const faceEl = document.getElementById('player-face') as HTMLImageElement;
+    const nameEl = document.getElementById('player-name');
+    const accEl = document.getElementById('player-account');
+    const signinBtn = document.getElementById('player-sign-in');
+    if (cardEl && faceEl && nameEl && accEl) {
+      if (p.face) faceEl.src = p.face;
+      nameEl.textContent = p.name || 'Lagos Hustler';
+      accEl.textContent = reply?.user?.account ? `@${reply.user.account}` : 'Guest';
+      if (signinBtn) {
+        signinBtn.style.display = reply?.user ? 'none' : 'inline-block';
+        signinBtn.onclick = () => {
+          window.location.href = `https://start.ng/?return_to=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
+        };
+      }
+      cardEl.style.display = 'flex';
     }
   }
 }
-if (!isMockMode()) initIdentity();
+initIdentity();
+window.addEventListener('focus', () => { initIdentity(); });
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') initIdentity();
+});
 
 // 6. Character Controls & Orbit Camera (Mouse Drag / Touch / Q & E)
 let isGameStarted = false;
