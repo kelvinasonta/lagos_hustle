@@ -122,27 +122,37 @@ crossStreetZs.forEach((crossZ) => {
   scene.add(signPlate);
 });
 
-// 4. City Buildings positioned along street blocks (avoiding intersection gaps)
+// 4. Bustling City Infrastructure: Buildings, Market Stalls, Billboards & Street Lamps
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
 const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8e, roughness: 0.7 });
 const commercialMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, roughness: 0.6 });
+const brickMat = new THREE.MeshStandardMaterial({ color: 0xb5502d, roughness: 0.85 }); // Laterite red / brick
+const glassWindowMat = new THREE.MeshStandardMaterial({ color: 0x22313f, roughness: 0.2, metalness: 0.8 });
+
+// Billboard / Signboard vibrant Lagos colors
+const billboardMats = [
+  new THREE.MeshBasicMaterial({ color: 0xe74c3c }), // Airtel / Coca-Cola red
+  new THREE.MeshBasicMaterial({ color: 0xf39c12 }), // MTN yellow
+  new THREE.MeshBasicMaterial({ color: 0x27ae60 }), // Glo green
+  new THREE.MeshBasicMaterial({ color: 0x2980b9 })  // Zenith / Access blue
+];
 
 // Helper to check if a Z position is near any intersection
 function isNearIntersection(z: number): boolean {
   return crossStreetZs.some((cz) => Math.abs(z - cz) < 14);
 }
 
-// Buildings along Main Avenue
+// Buildings along Main Avenue with window rows and rooftop billboards
 for (let i = 0; i < 28; i++) {
   const zPos = -130 + i * 10;
   if (isNearIntersection(zPos)) continue; // Keep intersection corners clear for connecting roads
 
-  const h = 12 + ((i * 13) % 24);
+  const h = 14 + ((i * 13) % 22);
   const w = 11;
   const d = 8.5;
-  const mat = i % 2 === 0 ? buildingMat : commercialMat;
+  const mat = i % 3 === 0 ? brickMat : i % 2 === 0 ? buildingMat : commercialMat;
 
-  // West side buildings
+  // West side building
   const bL = new THREE.Mesh(buildingGeo, mat);
   bL.scale.set(w, h, d);
   bL.position.set(-18, h / 2, zPos);
@@ -150,13 +160,156 @@ for (let i = 0; i < 28; i++) {
   bL.receiveShadow = true;
   scene.add(bL);
 
-  // East side buildings
+  // Storefront glass window on ground floor
+  const shopWindowL = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
+  shopWindowL.rotation.y = Math.PI / 2;
+  shopWindowL.position.set(-12.45, 2.0, zPos);
+  scene.add(shopWindowL);
+
+  // East side building
   const bR = new THREE.Mesh(buildingGeo, mat);
   bR.scale.set(w, h, d);
   bR.position.set(18, h / 2, zPos);
   bR.castShadow = true;
   bR.receiveShadow = true;
   scene.add(bR);
+
+  const shopWindowR = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), glassWindowMat);
+  shopWindowR.rotation.y = -Math.PI / 2;
+  shopWindowR.position.set(12.45, 2.0, zPos);
+  scene.add(shopWindowR);
+
+  // Rooftop Billboards on selected buildings
+  if (i % 4 === 1) {
+    const bbFrame = new THREE.Mesh(new THREE.BoxGeometry(6.4, 3.0, 0.3), billboardMats[i % billboardMats.length]);
+    bbFrame.position.set(18, h + 1.8, zPos);
+    bbFrame.castShadow = true;
+    scene.add(bbFrame);
+  }
+}
+
+// Street Light Poles along Sidewalks
+for (let z = -140; z <= 140; z += 24) {
+  for (let xSide of [-10.8, 10.8]) {
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.09, 6.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x333333 })
+    );
+    pole.position.set(xSide, 3.25, z);
+    pole.castShadow = true;
+    scene.add(pole);
+
+    // Lamp arm & glowing head
+    const arm = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.1, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x333333 })
+    );
+    arm.position.set(xSide > 0 ? xSide - 0.4 : xSide + 0.4, 6.4, z);
+    scene.add(arm);
+
+    const bulb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.15, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0xfffae6, emissive: 0xffe6aa, emissiveIntensity: 1.2 })
+    );
+    bulb.position.set(xSide > 0 ? xSide - 0.7 : xSide + 0.7, 6.3, z);
+    scene.add(bulb);
+  }
+}
+
+// Street Market Kiosks & Parasol Canopies (Bustling Lagos Street Hawkers / Vendors)
+const canopyColors = [0xe74c3c, 0xf1c40f, 0x2ecc71, 0x3498db, 0xe67e22];
+const marketZCoords = [-55, -25, 25, 55, -115, 115];
+
+marketZCoords.forEach((mz, idx) => {
+  [-11.2, 11.2].forEach((mx, sideIdx) => {
+    // Wooden stall table
+    const table = new THREE.Mesh(
+      new THREE.BoxGeometry(1.8, 0.8, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 })
+    );
+    table.position.set(mx, 0.45, mz);
+    table.castShadow = true;
+    scene.add(table);
+
+    // Parasol Canopy (Striped umbrella / tarp)
+    const canopyColor = canopyColors[(idx + sideIdx) % canopyColors.length];
+    const canopy = new THREE.Mesh(
+      new THREE.ConeGeometry(1.6, 0.6, 8),
+      new THREE.MeshStandardMaterial({ color: canopyColor, roughness: 0.6 })
+    );
+    canopy.position.set(mx, 2.1, mz);
+    canopy.castShadow = true;
+    scene.add(canopy);
+
+    const umbrellaPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 2.1, 6),
+      new THREE.MeshStandardMaterial({ color: 0xcccccc })
+    );
+    umbrellaPole.position.set(mx, 1.05, mz);
+    scene.add(umbrellaPole);
+  });
+});
+
+// Pedestrian NPCs walking along sidewalks
+interface PedestrianNPC {
+  avatar: AvatarGenerator;
+  x: number;
+  z: number;
+  speed: number;
+  direction: 1 | -1;
+  minZ: number;
+  maxZ: number;
+}
+
+const pedestrians: PedestrianNPC[] = [];
+const npcStyles = [
+  { primaryColor: '#e74c3c', secondaryColor: '#2c3e50', hairColor: '#000000', hat: 'cap' },
+  { primaryColor: '#2ecc71', secondaryColor: '#34495e', hairColor: '#1a1a1a', hat: 'none' },
+  { primaryColor: '#f39c12', secondaryColor: '#1e272c', hairColor: '#0f0f0f', hat: 'none' },
+  { primaryColor: '#9b59b6', secondaryColor: '#2d3436', hairColor: '#171717', hat: 'glasses' },
+  { primaryColor: '#1abc9c', secondaryColor: '#2c3e50', hairColor: '#000000', hat: 'cap' },
+  { primaryColor: '#e67e22', secondaryColor: '#34495e', hairColor: '#111111', hat: 'none' }
+];
+
+// Spawn NPCs along West & East sidewalks
+for (let pIdx = 0; pIdx < 12; pIdx++) {
+  const isWest = pIdx % 2 === 0;
+  const sideX = isWest ? -11.5 : 11.5;
+  const startZ = -120 + pIdx * 20;
+  const style = npcStyles[pIdx % npcStyles.length];
+
+  const npcUser: StartNgUser = {
+    id: 100 + pIdx,
+    name: `Pedestrian ${pIdx + 1}`,
+    account: `ped_${pIdx}`,
+    style: {
+      body: 'male',
+      primaryColor: style.primaryColor,
+      secondaryColor: style.secondaryColor,
+      skinColor: '#6d4023',
+      hairColor: style.hairColor,
+      hair: 'short',
+      hat: style.hat as any,
+      accessory: 'none'
+    },
+    face: ''
+  };
+
+  const npcAvatar = new AvatarGenerator(npcUser);
+  const dir: 1 | -1 = pIdx % 3 === 0 ? -1 : 1;
+  npcAvatar.group.position.set(sideX, 0, startZ);
+  npcAvatar.group.rotation.y = dir === 1 ? 0 : Math.PI;
+  scene.add(npcAvatar.group);
+
+  pedestrians.push({
+    avatar: npcAvatar,
+    x: sideX,
+    z: startZ,
+    speed: 1.8 + (pIdx % 4) * 0.4,
+    direction: dir,
+    minZ: -160,
+    maxZ: 160
+  });
 }
 
 // Buildings flanking the connecting cross streets
@@ -460,6 +613,20 @@ function animate() {
         }
       }
     }
+  }
+
+  // Update Pedestrian NPCs along sidewalks
+  for (const ped of pedestrians) {
+    ped.z += ped.speed * ped.direction * dt;
+    if (ped.direction === 1 && ped.z > ped.maxZ) {
+      ped.direction = -1;
+      ped.avatar.group.rotation.y = Math.PI;
+    } else if (ped.direction === -1 && ped.z < ped.minZ) {
+      ped.direction = 1;
+      ped.avatar.group.rotation.y = 0;
+    }
+    ped.avatar.group.position.z = ped.z;
+    ped.avatar.updateAnimation(dt, true, 1.0);
   }
 
   renderer.render(scene, camera);
