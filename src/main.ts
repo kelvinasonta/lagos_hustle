@@ -337,14 +337,18 @@ crossStreetZs.forEach((cz) => {
   }
 });
 
-// 5. Vehicles (Parked along curbs + Many in active motion)
+// 5. Vehicles (Parked along curbs + Many in active motion with collision avoidance)
 interface TrafficVehicle {
+  id: number;
   mesh: THREE.Group;
-  speed: number;
+  baseSpeed: number;
+  currentSpeed: number;
   direction: 'north' | 'south' | 'east' | 'west';
   axis: 'x' | 'z';
   minBound: number;
   maxBound: number;
+  laneCoord: number; // Constant coordinate (X for north/south, Z for east/west)
+  length: number;    // Approx length of vehicle
 }
 
 const trafficVehicles: TrafficVehicle[] = [];
@@ -386,7 +390,7 @@ parkedSpots.forEach((spot) => {
   scene.add(mesh);
 });
 
-// B. Moving Vehicles (Many vehicles cruising along Main Avenue and Connecting Cross Streets)
+// B. Moving Vehicles (Organized in distinct lanes with collision avoidance)
 interface MovingConfig {
   type: VehicleType;
   color?: number;
@@ -397,69 +401,79 @@ interface MovingConfig {
 }
 
 const movingConfigs: MovingConfig[] = [
-  // Main Avenue Northbound lane (X = 3.5m, moving towards -Z)
-  { type: 'danfo', color: 0xf7bf1f, x: 3.5, z: 70, speed: 14, direction: 'north' },
-  { type: 'sedan', color: 0x2980b9, x: 3.5, z: 120, speed: 18, direction: 'north' },
-  { type: 'keke',  color: 0xf7bf1f, x: 4.2, z: -20, speed: 10, direction: 'north' },
-  { type: 'danfo', color: 0xf7bf1f, x: 3.5, z: -100, speed: 15, direction: 'north' },
-  { type: 'sedan', color: 0xe74c3c, x: 3.5, z: -150, speed: 20, direction: 'north' },
+  // Main Avenue Northbound lane (X = 3.6m, heading North towards -Z, spaced evenly by 70m)
+  { type: 'danfo', color: 0xf7bf1f, x: 3.6, z: 120, speed: 13, direction: 'north' },
+  { type: 'sedan', color: 0x2980b9, x: 3.6, z: 50,  speed: 13, direction: 'north' },
+  { type: 'keke',  color: 0xf7bf1f, x: 3.6, z: -20, speed: 13, direction: 'north' },
+  { type: 'danfo', color: 0xf7bf1f, x: 3.6, z: -90, speed: 13, direction: 'north' },
+  { type: 'sedan', color: 0xe74c3c, x: 3.6, z: -160, speed: 13, direction: 'north' },
 
-  // Main Avenue Southbound lane (X = -3.5m, moving towards +Z)
-  { type: 'danfo', color: 0xf7bf1f, x: -3.5, z: -120, speed: 14, direction: 'south' },
-  { type: 'sedan', color: 0x8e44ad, x: -3.5, z: -50, speed: 17, direction: 'south' },
-  { type: 'keke',  color: 0xf7bf1f, x: -4.2, z: 15, speed: 11, direction: 'south' },
-  { type: 'danfo', color: 0xf7bf1f, x: -3.5, z: 90, speed: 15, direction: 'south' },
-  { type: 'sedan', color: 0x27ae60, x: -3.5, z: 140, speed: 19, direction: 'south' },
+  // Main Avenue Southbound lane (X = -3.6m, heading South towards +Z, spaced evenly by 70m)
+  { type: 'danfo', color: 0xf7bf1f, x: -3.6, z: -160, speed: 13, direction: 'south' },
+  { type: 'sedan', color: 0x8e44ad, x: -3.6, z: -90,  speed: 13, direction: 'south' },
+  { type: 'keke',  color: 0xf7bf1f, x: -3.6, z: -20,  speed: 13, direction: 'south' },
+  { type: 'danfo', color: 0xf7bf1f, x: -3.6, z: 50,   speed: 13, direction: 'south' },
+  { type: 'sedan', color: 0x27ae60, x: -3.6, z: 120,  speed: 13, direction: 'south' },
 
-  // Connecting Street at Z = 0 (Eastbound & Westbound)
-  { type: 'danfo', color: 0xf7bf1f, x: -90, z: -2.8, speed: 13, direction: 'east' },
-  { type: 'sedan', color: 0xf39c12, x: -30, z: -2.8, speed: 16, direction: 'east' },
-  { type: 'keke',  color: 0xf7bf1f, x: 80, z: 2.8, speed: 10, direction: 'west' },
-  { type: 'danfo', color: 0xf7bf1f, x: 30, z: 2.8, speed: 14, direction: 'west' },
+  // Connecting Street at Z = 0 (Eastbound Z = -3.2, Westbound Z = 3.2)
+  { type: 'danfo', color: 0xf7bf1f, x: -80, z: -3.2, speed: 11, direction: 'east' },
+  { type: 'sedan', color: 0xf39c12, x: 20,  z: -3.2, speed: 11, direction: 'east' },
+  { type: 'keke',  color: 0xf7bf1f, x: 80,  z: 3.2,  speed: 11, direction: 'west' },
+  { type: 'danfo', color: 0xf7bf1f, x: -20, z: 3.2,  speed: 11, direction: 'west' },
 
   // Connecting Street at Z = -80 (Eastbound & Westbound)
-  { type: 'sedan', color: 0x34495e, x: -70, z: -82.8, speed: 15, direction: 'east' },
-  { type: 'danfo', color: 0xf7bf1f, x: 60, z: -77.2, speed: 13, direction: 'west' },
+  { type: 'sedan', color: 0x34495e, x: -60, z: -83.2, speed: 11, direction: 'east' },
+  { type: 'danfo', color: 0xf7bf1f, x: 60,  z: -76.8, speed: 11, direction: 'west' },
 
   // Connecting Street at Z = 80 (Eastbound & Westbound)
-  { type: 'keke',  color: 0xf7bf1f, x: -60, z: 77.2, speed: 11, direction: 'east' },
-  { type: 'sedan', color: 0x1abc9c, x: 70, z: 82.8, speed: 17, direction: 'west' }
+  { type: 'keke',  color: 0xf7bf1f, x: -60, z: 76.8, speed: 11, direction: 'east' },
+  { type: 'sedan', color: 0x1abc9c, x: 60,  z: 83.2, speed: 11, direction: 'west' }
 ];
 
-movingConfigs.forEach((cfg) => {
+movingConfigs.forEach((cfg, idx) => {
   const mesh = createVehicle({ type: cfg.type, primaryColor: cfg.color });
   mesh.position.set(cfg.x, 0, cfg.z);
 
   let axis: 'x' | 'z' = 'z';
   let minBound = -180;
   let maxBound = 180;
+  let laneCoord = cfg.x;
+  const length = cfg.type === 'danfo' ? 5.2 : cfg.type === 'sedan' ? 4.5 : 2.5;
 
   if (cfg.direction === 'north') {
     mesh.rotation.y = Math.PI; // Heading -Z
     axis = 'z';
+    laneCoord = cfg.x;
   } else if (cfg.direction === 'south') {
     mesh.rotation.y = 0; // Heading +Z
     axis = 'z';
+    laneCoord = cfg.x;
   } else if (cfg.direction === 'east') {
     mesh.rotation.y = Math.PI / 2; // Heading +X
     axis = 'x';
     minBound = -140;
     maxBound = 140;
+    laneCoord = cfg.z;
   } else if (cfg.direction === 'west') {
     mesh.rotation.y = -Math.PI / 2; // Heading -X
     axis = 'x';
     minBound = -140;
     maxBound = 140;
+    laneCoord = cfg.z;
   }
 
   scene.add(mesh);
   trafficVehicles.push({
+    id: idx,
     mesh,
-    speed: cfg.speed,
+    baseSpeed: cfg.speed,
+    currentSpeed: cfg.speed,
     direction: cfg.direction,
     axis,
     minBound,
-    maxBound
+    maxBound,
+    laneCoord,
+    length
   });
 });
 
@@ -591,28 +605,81 @@ function animate() {
   camera.position.lerp(targetCamPos, 0.12);
   camera.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
 
-  // Update Traffic Vehicles
+  // Update Traffic Vehicles with Intelligent Collision Avoidance
+  const SAFE_FOLLOW_DISTANCE = 16.0; // Minimum gap before slowing down
+  const STOP_DISTANCE = 8.5;        // Full stop gap
+
   for (const v of trafficVehicles) {
+    let targetSpeed = v.baseSpeed;
+
+    // 1. Check for leading vehicle directly ahead in the same lane
+    for (const other of trafficVehicles) {
+      if (v.id === other.id) continue;
+
+      // Must be on same axis and travel direction
+      if (v.axis === other.axis && v.direction === other.direction && Math.abs(v.laneCoord - other.laneCoord) < 1.0) {
+        let forwardDist = 999;
+
+        if (v.direction === 'north') { // Moving towards -Z
+          forwardDist = v.mesh.position.z - other.mesh.position.z;
+        } else if (v.direction === 'south') { // Moving towards +Z
+          forwardDist = other.mesh.position.z - v.mesh.position.z;
+        } else if (v.direction === 'east') { // Moving towards +X
+          forwardDist = other.mesh.position.x - v.mesh.position.x;
+        } else if (v.direction === 'west') { // Moving towards -X
+          forwardDist = v.mesh.position.x - other.mesh.position.x;
+        }
+
+        // If other car is ahead of us
+        if (forwardDist > 0 && forwardDist < SAFE_FOLLOW_DISTANCE) {
+          if (forwardDist < STOP_DISTANCE) {
+            targetSpeed = 0; // Stop to prevent rear-ending
+          } else {
+            const ratio = (forwardDist - STOP_DISTANCE) / (SAFE_FOLLOW_DISTANCE - STOP_DISTANCE);
+            targetSpeed = Math.min(targetSpeed, other.currentSpeed * ratio);
+          }
+        }
+      }
+    }
+
+    // 2. Intersection Right-of-Way: Cross street vehicles yield if an avenue vehicle is passing
+    if (v.axis === 'x') {
+      const approachingIntersection = Math.abs(v.mesh.position.x) < 16.0;
+      if (approachingIntersection) {
+        // Check if an avenue car is inside the intersection box
+        const avenueVehicleInCross = trafficVehicles.some(
+          (av) => av.axis === 'z' && Math.abs(av.mesh.position.z - v.laneCoord) < 8.0 && Math.abs(av.mesh.position.x) < 7.0
+        );
+        if (avenueVehicleInCross) {
+          targetSpeed = 0; // Yield right-of-way to main avenue traffic
+        }
+      }
+    }
+
+    // Smooth speed interpolation (gradual acceleration / braking)
+    v.currentSpeed = THREE.MathUtils.lerp(v.currentSpeed, targetSpeed, dt * 5.0);
+
+    // Apply movement
     if (v.axis === 'z') {
       if (v.direction === 'north') {
-        v.mesh.position.z -= v.speed * dt;
+        v.mesh.position.z -= v.currentSpeed * dt;
         if (v.mesh.position.z < v.minBound) {
           v.mesh.position.z = v.maxBound;
         }
       } else {
-        v.mesh.position.z += v.speed * dt;
+        v.mesh.position.z += v.currentSpeed * dt;
         if (v.mesh.position.z > v.maxBound) {
           v.mesh.position.z = v.minBound;
         }
       }
     } else {
       if (v.direction === 'east') {
-        v.mesh.position.x += v.speed * dt;
+        v.mesh.position.x += v.currentSpeed * dt;
         if (v.mesh.position.x > v.maxBound) {
           v.mesh.position.x = v.minBound;
         }
       } else {
-        v.mesh.position.x -= v.speed * dt;
+        v.mesh.position.x -= v.currentSpeed * dt;
         if (v.mesh.position.x < v.minBound) {
           v.mesh.position.x = v.maxBound;
         }
