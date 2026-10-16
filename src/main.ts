@@ -511,9 +511,10 @@ const keys: Record<string, boolean> = {};
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-let playerPos = new THREE.Vector3(0, 0, 20);
-let playerYaw = Math.PI; // Face forward down the street toward the intersection
-const moveSpeed = 8.0;
+// Start safely on the East sidewalk (X = 11.2, Y = 0.05 on the curb, Z = 16)
+let playerPos = new THREE.Vector3(11.2, 0.05, 16);
+let playerYaw = Math.PI; // Looking down the bustling avenue sidewalk
+const moveSpeed = 7.0;
 
 // Resize handler
 window.addEventListener('resize', () => {
@@ -560,14 +561,18 @@ function animate() {
     playerPos.x += (moveX / norm) * moveSpeed * dt;
     playerPos.z += (moveZ / norm) * moveSpeed * dt;
 
-    // Check boundaries: on main avenue (-9 to 9) OR on cross streets (near cross street Z, X between -145 and 145)
+    // Check boundaries: on avenue + sidewalks (-13.5 to 13.5) OR on cross streets (near cross street Z, X between -140 and 140)
     const onCrossStreet = crossStreetZs.some((cz) => Math.abs(playerPos.z - cz) <= 7.0);
     if (!onCrossStreet) {
-      playerPos.x = Math.max(-9.0, Math.min(9.0, playerPos.x));
+      playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
     } else {
       playerPos.x = Math.max(-140.0, Math.min(140.0, playerPos.x));
     }
     playerPos.z = Math.max(-180.0, Math.min(180.0, playerPos.z));
+
+    // Subtle curb elevation: when on sidewalk (|x| >= 10.0), step up to curb level (y = 0.05)
+    const onSidewalk = Math.abs(playerPos.x) >= 10.0 && !onCrossStreet;
+    playerPos.y = onSidewalk ? 0.05 : 0.0;
   }
 
   playerGroup.position.copy(playerPos);
