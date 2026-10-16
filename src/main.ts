@@ -73,6 +73,25 @@ mainCenterLine.rotation.x = -Math.PI / 2;
 mainCenterLine.position.y = 0.01;
 scene.add(mainCenterLine);
 
+// Collision Obstacle System for Physical Solid Objects
+interface WorldCollider {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+const worldColliders: WorldCollider[] = [];
+
+function registerObstacle(x: number, z: number, width: number, depth: number) {
+  worldColliders.push({
+    minX: x - width / 2,
+    maxX: x + width / 2,
+    minZ: z - depth / 2,
+    maxZ: z + depth / 2
+  });
+}
+
 // Connecting cross streets (Intersections at Z = -80, Z = 0, Z = 80)
 const crossStreetZs = [-80, 0, 80];
 crossStreetZs.forEach((crossZ) => {
@@ -112,6 +131,7 @@ crossStreetZs.forEach((crossZ) => {
   signPole.position.set(11.5, 2.1, crossZ + 9.5);
   signPole.castShadow = true;
   scene.add(signPole);
+  registerObstacle(11.5, crossZ + 9.5, 0.3, 0.3);
 
   const signPlate = new THREE.Mesh(
     new THREE.BoxGeometry(2.4, 0.6, 0.1),
@@ -123,24 +143,6 @@ crossStreetZs.forEach((crossZ) => {
 });
 
 // 4. Bustling City Infrastructure: Buildings, Market Stalls, Billboards & Street Lamps
-// Collision Obstacle System for Physical Solid Objects
-interface WorldCollider {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
-
-const worldColliders: WorldCollider[] = [];
-
-function registerObstacle(x: number, z: number, width: number, depth: number) {
-  worldColliders.push({
-    minX: x - width / 2,
-    maxX: x + width / 2,
-    minZ: z - depth / 2,
-    maxZ: z + depth / 2
-  });
-}
 
 const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
 const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8e, roughness: 0.7 });
@@ -219,6 +221,7 @@ for (let z = -140; z <= 140; z += 24) {
     pole.position.set(xSide, 3.25, z);
     pole.castShadow = true;
     scene.add(pole);
+    registerObstacle(xSide, z, 0.35, 0.35);
 
     // Lamp arm & glowing head
     const arm = new THREE.Mesh(
