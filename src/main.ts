@@ -1,239 +1,306 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { askStartNg, redirectToSignIn, WhoAmIReply, isMockMode, StartNgUser } from './net/startng';
-import { AvatarGenerator } from './character/AvatarGenerator';
-import { EuropeanUrbanBuilding } from './world/EuropeanBuilding';
 import { createPrismTower } from './world/PrismTower';
-import { NPCSystem } from './ai/NPCSystem';
+import { RealisticNPCManager } from './character/RealisticCharacter';
+import { createToonMaterial } from './gfx/CelShader';
 
-async function initLumioseCity() {
+async function initRealisticGame() {
   const container = document.getElementById('canvas-container')!;
   const statsEl = document.getElementById('spike-stats')!;
 
-  // 1. Scene & Crisp Azure Sky (Matches Reference Image)
+  // 1. Scene & Crisp Azure JRPG Sky
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#82ccdd');
-  scene.fog = new THREE.FogExp2('#c7ecee', 0.005);
+  scene.background = new THREE.Color('#74b9ff');
+  scene.fog = new THREE.FogExp2('#dfe6e9', 0.0035);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 3.8, 8);
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 3.4, 7);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Sunlight (Clear bright daylight)
-  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x535c68, 1.2);
+  // Sunlight (Warm bright JRPG sunlight)
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x636e72, 1.3);
   scene.add(hemiLight);
 
-  const sunLight = new THREE.DirectionalLight(0xfffaed, 2.2);
-  sunLight.position.set(30, 70, 40);
+  const sunLight = new THREE.DirectionalLight(0xfffaed, 2.5);
+  sunLight.position.set(40, 80, 50);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
   sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 250;
-  sunLight.shadow.camera.left = -40;
-  sunLight.shadow.camera.right = 40;
-  sunLight.shadow.camera.top = 40;
-  sunLight.shadow.camera.bottom = -40;
+  sunLight.shadow.camera.far = 300;
+  sunLight.shadow.camera.left = -50;
+  sunLight.shadow.camera.right = 50;
+  sunLight.shadow.camera.top = 50;
+  sunLight.shadow.camera.bottom = -50;
   scene.add(sunLight);
 
-  // 2. Cobblestone Boulevard & Pedestrian Planters
-  const groundGeo = new THREE.PlaneGeometry(160, 300);
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.85 });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // 2. Texture Loading (PBR Textures with Mipmaps)
+  const textureLoader = new THREE.TextureLoader();
+  const cobbleTex = textureLoader.load('./assets/textures/cobblestone.webp');
+  cobbleTex.wrapS = THREE.RepeatWrapping;
+  cobbleTex.wrapT = THREE.RepeatWrapping;
+  cobbleTex.repeat.set(6, 40);
 
-  // Cobblestone Main Avenue Street Path
-  const avenueGeo = new THREE.PlaneGeometry(18, 260);
-  const avenueMat = new THREE.MeshStandardMaterial({ color: 0xc8d6e5, roughness: 0.75 });
+  const stoneTex = textureLoader.load('./assets/textures/stone_facade.webp');
+  stoneTex.wrapS = THREE.RepeatWrapping;
+  stoneTex.wrapT = THREE.RepeatWrapping;
+  stoneTex.repeat.set(3, 4);
+
+  const roofTex = textureLoader.load('./assets/textures/roof_slate.webp');
+  roofTex.wrapS = THREE.RepeatWrapping;
+  roofTex.wrapT = THREE.RepeatWrapping;
+  roofTex.repeat.set(4, 4);
+
+  // Grand Cobblestone Boulevard Avenue
+  const avenueGeo = new THREE.PlaneGeometry(20, 280);
+  const avenueMat = new THREE.MeshStandardMaterial({
+    map: cobbleTex,
+    roughness: 0.7,
+    metalness: 0.1
+  });
   const avenue = new THREE.Mesh(avenueGeo, avenueMat);
   avenue.rotation.x = -Math.PI / 2;
-  avenue.position.y = 0.02;
   avenue.receiveShadow = true;
   scene.add(avenue);
 
-  // Sidewalk Curbs
-  const curbMat = new THREE.MeshStandardMaterial({ color: 0x8395a7, roughness: 0.6 });
-  const curbL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 260), curbMat);
-  curbL.position.set(-9.3, 0.12, 0);
+  // Curbs
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0x636e72, roughness: 0.8 });
+  const curbL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 280), curbMat);
+  curbL.position.set(-10.4, 0.12, 0);
   curbL.receiveShadow = true;
   scene.add(curbL);
 
   const curbR = curbL.clone();
-  curbR.position.x = 9.3;
+  curbR.position.x = 10.4;
   scene.add(curbR);
 
-  // Center Planters with Grass & Lush Shade Trees (Exact from reference)
-  const treeGeo = new THREE.CylinderGeometry(0.3, 0.45, 6, 8);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x574b32 });
-  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.65 });
+  // Sidewalks
+  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xb2bec3, roughness: 0.9 });
+  const sidewalkL = new THREE.Mesh(new THREE.PlaneGeometry(16, 280), sidewalkMat);
+  sidewalkL.rotation.x = -Math.PI / 2;
+  sidewalkL.position.set(-18.8, 0.25, 0);
+  sidewalkL.receiveShadow = true;
+  scene.add(sidewalkL);
+
+  const sidewalkR = sidewalkL.clone();
+  sidewalkR.position.x = 18.8;
+  scene.add(sidewalkR);
+
+  // 3. Central Planters with Grass & Lush Trees (Matches Reference)
+  const treeTrunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 6, 12);
+  const trunkMat = createToonMaterial(0x574b32);
+  const foliageMat = createToonMaterial(0x27ae60);
   const planterMat = new THREE.MeshStandardMaterial({ color: 0x718093, roughness: 0.8 });
-  const grassMat = new THREE.MeshStandardMaterial({ color: 0x6ab04c, roughness: 0.9 });
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x44bd32, roughness: 0.9 });
 
   for (let z = -90; z <= 90; z += 30) {
-    // Rectangular Grass Planter
-    const planterBox = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.28, 6.0), planterMat);
-    planterBox.position.set(0, 0.14, z);
+    const planterBox = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.35, 6.5), planterMat);
+    planterBox.position.set(0, 0.18, z);
     planterBox.receiveShadow = true;
     scene.add(planterBox);
 
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 5.6), grassMat);
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 6.1), grassMat);
     grass.rotation.x = -Math.PI / 2;
-    grass.position.set(0, 0.29, z);
+    grass.position.set(0, 0.36, z);
     scene.add(grass);
 
-    // Tree in center of planter
     const tree = new THREE.Group();
     tree.position.set(0, 0, z);
 
-    const trunk = new THREE.Mesh(treeGeo, trunkMat);
+    const trunk = new THREE.Mesh(treeTrunkGeo, trunkMat);
     trunk.position.y = 3.0;
     trunk.castShadow = true;
     tree.add(trunk);
 
-    const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.4, 8, 8), foliageMat);
-    foliage.scale.set(1.2, 1.4, 1.2);
-    foliage.position.y = 6.2;
+    const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 12), foliageMat);
+    foliage.scale.set(1.3, 1.4, 1.3);
+    foliage.position.y = 6.4;
     foliage.castShadow = true;
     tree.add(foliage);
 
     scene.add(tree);
   }
 
-  // Victorian Triple-Lantern Streetlamps
-  const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.8, roughness: 0.3 });
-  const lampGlassMat = new THREE.MeshStandardMaterial({ color: 0xfffae6, emissive: 0xfff9e6, emissiveIntensity: 0.8 });
+  // Victorian Streetlamps
+  const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, metalness: 0.8, roughness: 0.3 });
+  const lampGlassMat = new THREE.MeshStandardMaterial({ color: 0xfffae6, emissive: 0xfffae6, emissiveIntensity: 1.0 });
 
-  for (let z = -100; z <= 100; z += 24) {
-    for (const side of [-10.5, 10.5]) {
+  for (let z = -100; z <= 100; z += 25) {
+    for (const side of [-11.5, 11.5]) {
       const lamp = new THREE.Group();
       lamp.position.set(side, 0, z);
 
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 5.0, 8), lampPoleMat);
-      pole.position.y = 2.5;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 5.2, 8), lampPoleMat);
+      pole.position.y = 2.6;
       pole.castShadow = true;
       lamp.add(pole);
 
-      const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.4), lampGlassMat);
-      lantern.position.y = 5.2;
+      const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.65, 0.45), lampGlassMat);
+      lantern.position.y = 5.4;
       lamp.add(lantern);
 
       scene.add(lamp);
     }
   }
 
-  // 3. Haussmann European Urban Buildings Flanking Both Sides
-  const buildingColors = [0xd1ccc0, 0xf5cd79, 0xf7d794, 0xeccc68, 0xced6e0];
-  const trimColors = [0x57606f, 0x2f3542, 0x747d8c];
+  // 4. Textured Haussmann Buildings with Boutique Storefronts & Blue Shutters
+  const buildingMat = new THREE.MeshStandardMaterial({
+    map: stoneTex,
+    roughness: 0.8,
+    metalness: 0.05
+  });
 
-  for (let z = -100; z <= 100; z += 22) {
-    // Left Side Building
-    const bLeft = new EuropeanUrbanBuilding({
-      width: 18,
-      height: 22,
-      depth: 18,
-      floors: 5,
-      wallColor: buildingColors[Math.abs(z) % buildingColors.length],
-      trimColor: trimColors[Math.abs(z) % trimColors.length],
-      hasShopFront: true,
-      roofType: 'mansard'
-    });
-    bLeft.mesh.position.set(-20, 0, z);
-    scene.add(bLeft.mesh);
+  const roofMat = new THREE.MeshStandardMaterial({
+    map: roofTex,
+    roughness: 0.6
+  });
 
-    // Right Side Building
-    const bRight = new EuropeanUrbanBuilding({
-      width: 18,
-      height: 22,
-      depth: 18,
-      floors: 5,
-      wallColor: buildingColors[(Math.abs(z) + 1) % buildingColors.length],
-      trimColor: trimColors[(Math.abs(z) + 1) % trimColors.length],
-      hasShopFront: true,
-      roofType: 'mansard'
-    });
-    bRight.mesh.position.set(20, 0, z);
-    bRight.mesh.rotation.y = Math.PI; // Face inward to boulevard
-    scene.add(bRight.mesh);
+  const windowGlass = new THREE.MeshStandardMaterial({
+    color: 0x225588,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+
+  const shopMat = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.6 });
+  const shutterMat = createToonMaterial(0x3867d6);
+  const bannerMat = createToonMaterial(0x2ed573);
+
+  for (let z = -100; z <= 100; z += 24) {
+    for (const side of [-1, 1]) {
+      const bGroup = new THREE.Group();
+      bGroup.position.set(side * 22, 0, z);
+
+      // Core Building
+      const core = new THREE.Mesh(new THREE.BoxGeometry(20, 24, 20), buildingMat);
+      core.position.y = 12;
+      core.castShadow = true;
+      core.receiveShadow = true;
+      bGroup.add(core);
+
+      // Ground Floor Boutique Shop
+      const shop = new THREE.Mesh(new THREE.BoxGeometry(20.4, 4.5, 20.4), shopMat);
+      shop.position.y = 2.25;
+      shop.castShadow = true;
+      bGroup.add(shop);
+
+      // Shop Window Glass
+      const shopWin = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.6), windowGlass);
+      shopWin.position.set(0, 2.2, -side * 10.25);
+      if (side === 1) shopWin.rotation.y = Math.PI;
+      bGroup.add(shopWin);
+
+      // Red Awning Canopy
+      const awning = new THREE.Mesh(new THREE.BoxGeometry(15, 0.15, 2.2), createToonMaterial(0xeb4d4b));
+      awning.position.set(0, 3.8, -side * 11.2);
+      bGroup.add(awning);
+
+      // Hanging Vertical Green Banner (from reference image)
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 3.4), bannerMat);
+      banner.position.set(-side * 8, 8, -side * 10.3);
+      if (side === 1) banner.rotation.y = Math.PI;
+      bGroup.add(banner);
+
+      // Rows of Windows with Blue Shutters
+      for (let floor = 1; floor <= 4; floor++) {
+        const y = floor * 4.5 + 2.5;
+        for (let col = -2; col <= 2; col++) {
+          const x = col * 3.4;
+          const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.0), windowGlass);
+          win.position.set(x, y, -side * 10.05);
+          if (side === 1) win.rotation.y = Math.PI;
+          bGroup.add(win);
+
+          // Blue Shutters
+          const shutL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.08), shutterMat);
+          shutL.position.set(x - 0.9, y, -side * 10.08);
+          bGroup.add(shutL);
+
+          const shutR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.08), shutterMat);
+          shutR.position.set(x + 0.9, y, -side * 10.08);
+          bGroup.add(shutR);
+        }
+      }
+
+      // Mansard Roof
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(20.2, 3.5, 20.2), roofMat);
+      roof.position.y = 25.75;
+      bGroup.add(roof);
+
+      scene.add(bGroup);
+    }
   }
 
-  // 4. Iconic White & Glass Prism Tower in the Far Center Vista (from image)
+  // 5. Monumental Prism Tower in the Far Vista
   const prismTower = createPrismTower();
   prismTower.position.set(0, 0, -135);
   scene.add(prismTower);
 
-  // 5. Physics Engine
+  // 6. Rapier Physics
   await RAPIER.init();
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   const groundBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0));
   world.createCollider(RAPIER.ColliderDesc.cuboid(80, 0.1, 150), groundBody);
 
-  // 6. Interactive NPC System
-  const npcSystem = new NPCSystem();
-  scene.add(npcSystem.group);
+  // 7. Realistic NPC Manager & Characters
+  const npcManager = new RealisticNPCManager();
+  scene.add(npcManager.group);
 
-  // Add real city NPCs matching reference picture (Gentleman in Suit, Girl in dress, Tourist, Shopkeeper, Student)
-  npcSystem.add(
+  // Add Butler in Suit (Pierre)
+  npcManager.createCharacter(
     'Pierre',
-    'Butler / Concierge',
-    'Bonjour! Welcome to the Central Avenue plaza. The Prism Tower is breathtaking today!',
+    'Grand Hotel Concierge',
+    'Bonjour! Welcome to Central Avenue. Have you visited the Prism Tower observation deck yet?',
     new THREE.Vector3(-4.5, 0, 8),
-    { top: 0x1e272e, pants: 0x2d3436, skin: 0xf5cd79 } // Dapper suit
+    { top: 0x1e272e, pants: 0x2d3436, skin: 0xf5cd79, hair: 0x1e272e, cap: 0x1e272e }
   );
 
-  npcSystem.add(
+  // Walking Stroller (Camille)
+  npcManager.createCharacter(
     'Camille',
     'City Stroller',
-    'I love the morning breeze through the trees along the avenue!',
-    new THREE.Vector3(4.2, 0, 12),
-    { top: 0x0984e3, pants: 0xf5f6fa, skin: 0xf8c291 },
-    [new THREE.Vector3(4.2, 0, -25)] // Walking NPC
+    'The breeze along the avenue feels so refreshing today!',
+    new THREE.Vector3(4.5, 0, 12),
+    { top: 0x0984e3, pants: 0xf5f6fa, skin: 0xf8c291, hair: 0xd63031 },
+    new THREE.Vector3(4.5, 0, -35)
   );
 
-  npcSystem.add(
+  // Walking Tourist (Luc)
+  npcManager.createCharacter(
     'Luc',
-    'Tourist',
-    'Have you seen the observation deck on Prism Tower? You can see the whole region!',
-    new THREE.Vector3(-5.2, 0, -18),
-    { top: 0xe67e22, pants: 0x34495e, skin: 0xdfe4ea },
-    [new THREE.Vector3(-5.2, 0, 15)] // Walking NPC
+    'Photographer',
+    'I just took the most magnificent photo of Prism Tower from this angle!',
+    new THREE.Vector3(-4.8, 0, -22),
+    { top: 0xe67e22, pants: 0x34495e, skin: 0xdfe4ea, hair: 0x2d3436, backpack: true },
+    new THREE.Vector3(-4.8, 0, 15)
   );
 
-  npcSystem.add(
+  // Cafe Owner (Sophie)
+  npcManager.createCharacter(
     'Sophie',
-    'Cafe Owner',
-    'Our freshly baked croissants and espresso are ready at the corner bakery!',
-    new THREE.Vector3(6.5, 0, -5),
-    { top: 0xe84118, pants: 0x2f3542, skin: 0xf19066 }
+    'Patisserie Chef',
+    'Fresh hot baguettes and macarons are ready right out of the oven!',
+    new THREE.Vector3(6.5, 0, -8),
+    { top: 0xe84118, pants: 0x2f3542, skin: 0xf19066, hair: 0xfbc531 }
   );
 
-  npcSystem.add(
-    'Antoine',
-    'Artist',
-    'The architectural symmetry of these Haussmann buildings inspires my paintings every day.',
-    new THREE.Vector3(-3.8, 0, -42),
-    { top: 0x6c5ce7, pants: 0x2d3436, skin: 0xf3a683 },
-    [new THREE.Vector3(-3.8, 0, -10)]
-  );
-
-  // 7. Player Character Setup
+  // 8. Player Character (Stylized Trainer matching reference with Backpack & Cap)
   let currentUser: StartNgUser = {
     id: 1,
-    name: 'Player',
-    account: 'adventurer',
+    name: 'Kelvin',
+    account: 'trainer_kelvin',
     style: {
       body: 'male',
-      primaryColor: '#2d3436', // Black / grey stylish jacket (like reference image)
-      secondaryColor: '#1e272e', // Dark trousers
+      primaryColor: '#2d3436',
+      secondaryColor: '#1e272e',
       skinColor: '#f8c291',
       hairColor: '#17120f',
       hair: 'short',
@@ -243,19 +310,79 @@ async function initLumioseCity() {
     face: ''
   };
 
-  let avatar: AvatarGenerator | null = null;
   const playerGroup = new THREE.Group();
   playerGroup.position.set(0, 0, 18);
   scene.add(playerGroup);
 
-  function rebuildAvatar(user: StartNgUser) {
-    if (avatar) playerGroup.remove(avatar.group);
-    avatar = new AvatarGenerator(user);
-    playerGroup.add(avatar.group);
-  }
-  rebuildAvatar(currentUser);
+  // Player Model (Cel-shaded with cap and red backpack)
+  const playerSkinMat = createToonMaterial(0xf8c291);
+  const playerJacketMat = createToonMaterial(0x2d3436);
+  const playerPantsMat = createToonMaterial(0x1e272e);
+  const playerShoeMat = createToonMaterial(0xeb4d4b);
+  const playerBagMat = createToonMaterial(0xe84118);
+  const playerCapMat = createToonMaterial(0x2d3436);
 
-  // start.ng profile card
+  // Torso
+  const pTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.22, 0.65, 12), playerJacketMat);
+  pTorso.position.y = 1.05;
+  pTorso.castShadow = true;
+  playerGroup.add(pTorso);
+
+  // Red waist bag / backpack
+  const pBag = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.22), playerBagMat);
+  pBag.position.set(0, 1.05, -0.22);
+  pBag.castShadow = true;
+  playerGroup.add(pBag);
+
+  // Head
+  const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), playerSkinMat);
+  pHead.position.y = 1.55;
+  playerGroup.add(pHead);
+
+  // Cap
+  const pCap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.24, 0.1, 12), playerCapMat);
+  pCap.position.set(0, 1.7, 0);
+  const pVisor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.02, 0.18), playerCapMat);
+  pVisor.position.set(0, 1.66, 0.18);
+  playerGroup.add(pCap);
+  playerGroup.add(pVisor);
+
+  // Limbs
+  const pLeftArm = new THREE.Group();
+  pLeftArm.position.set(-0.33, 1.3, 0);
+  const pLArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.55, 8), playerJacketMat);
+  pLArmMesh.position.y = -0.22;
+  pLeftArm.add(pLArmMesh);
+  playerGroup.add(pLeftArm);
+
+  const pRightArm = new THREE.Group();
+  pRightArm.position.set(0.33, 1.3, 0);
+  const pRArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.55, 8), playerJacketMat);
+  pRArmMesh.position.y = -0.22;
+  pRightArm.add(pRArmMesh);
+  playerGroup.add(pRightArm);
+
+  const pLeftLeg = new THREE.Group();
+  pLeftLeg.position.set(-0.13, 0.72, 0);
+  const pLLegMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.65, 8), playerPantsMat);
+  pLLegMesh.position.y = -0.28;
+  pLeftLeg.add(pLLegMesh);
+  const pLShoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.28), playerShoeMat);
+  pLShoe.position.set(0, -0.62, 0.05);
+  pLeftLeg.add(pLShoe);
+  playerGroup.add(pLeftLeg);
+
+  const pRightLeg = new THREE.Group();
+  pRightLeg.position.set(0.13, 0.72, 0);
+  const pRLegMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.65, 8), playerPantsMat);
+  pRLegMesh.position.y = -0.28;
+  pRightLeg.add(pRLegMesh);
+  const pRShoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.28), playerShoeMat);
+  pRShoe.position.set(0, -0.62, 0.05);
+  pRightLeg.add(pRShoe);
+  playerGroup.add(pRightLeg);
+
+  // Identity Hookup
   const cardEl = document.getElementById('player-card')!;
   const faceEl = document.getElementById('player-face') as HTMLImageElement;
   const nameEl = document.getElementById('player-name')!;
@@ -272,7 +399,6 @@ async function initLumioseCity() {
       const p = reply.user ?? reply.guest;
       if (p) {
         currentUser = p;
-        rebuildAvatar(p);
         faceEl.src = p.face;
         nameEl.textContent = p.name;
         accountEl.textContent = reply.user?.account ? `@${reply.user.account}` : 'City Explorer';
@@ -298,17 +424,17 @@ async function initLumioseCity() {
     dialogueBox = document.createElement('div');
     dialogueBox.id = 'npc-dialogue';
     dialogueBox.style.position = 'fixed';
-    dialogueBox.style.bottom = '90px';
+    dialogueBox.style.bottom = '85px';
     dialogueBox.style.left = '50%';
     dialogueBox.style.transform = 'translateX(-50%)';
     dialogueBox.style.background = 'rgba(24, 27, 34, 0.94)';
-    dialogueBox.style.border = '2px solid #38ada9';
+    dialogueBox.style.border = '2px solid #74b9ff';
     dialogueBox.style.borderRadius = '16px';
-    dialogueBox.style.padding = '16px 24px';
-    dialogueBox.style.maxWidth = '600px';
+    dialogueBox.style.padding = '16px 26px';
+    dialogueBox.style.maxWidth = '620px';
     dialogueBox.style.width = '90%';
     dialogueBox.style.boxShadow = '0 12px 35px rgba(0,0,0,0.6)';
-    dialogueBox.style.backdropFilter = 'blur(10px)';
+    dialogueBox.style.backdropFilter = 'blur(12px)';
     dialogueBox.style.zIndex = '100';
     dialogueBox.style.display = 'none';
     dialogueBox.style.color = '#ffffff';
@@ -316,14 +442,15 @@ async function initLumioseCity() {
     document.body.appendChild(dialogueBox);
   }
 
-  // 8. Movement Controls & Game Loop
+  // 9. Controls & Smooth JRPG Movement
   const keys: Record<string, boolean> = {};
   window.addEventListener('keydown', (e) => { keys[e.code] = true; });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
   let playerPos = new THREE.Vector3(0, 0, 18);
-  let playerYaw = Math.PI; // Face toward the Prism Tower by default
-  const moveSpeed = 8.0;
+  let playerYaw = Math.PI;
+  const moveSpeed = 8.5;
+  let animTime = 0;
   let lastTime = performance.now();
   let fps = 60;
   let frameCount = 0;
@@ -363,49 +490,64 @@ async function initLumioseCity() {
       playerPos.x += (moveX / norm) * moveSpeed * dt;
       playerPos.z += (moveZ / norm) * moveSpeed * dt;
 
-      // Keep player inside the boulevard boundaries
-      playerPos.x = Math.max(-9.0, Math.min(9.0, playerPos.x));
-      playerPos.z = Math.max(-110, Math.min(100, playerPos.z));
+      // Stay within avenue
+      playerPos.x = Math.max(-9.5, Math.min(9.5, playerPos.x));
+      playerPos.z = Math.max(-115, Math.min(100, playerPos.z));
+
+      // Player walk animation
+      animTime += dt * 10;
+      const angle = Math.sin(animTime) * 0.7;
+      pLeftLeg.rotation.x = angle;
+      pRightLeg.rotation.x = -angle;
+      pLeftArm.rotation.x = -angle * 0.8;
+      pRightArm.rotation.x = angle * 0.8;
+      pTorso.position.y = 1.05 + Math.abs(Math.sin(animTime * 2)) * 0.03;
+      pHead.position.y = 1.55 + Math.abs(Math.sin(animTime * 2)) * 0.03;
+    } else {
+      animTime += dt * 2;
+      const breath = Math.sin(animTime) * 0.02;
+      pLeftLeg.rotation.x = 0;
+      pRightLeg.rotation.x = 0;
+      pLeftArm.rotation.x = breath * 0.5;
+      pRightArm.rotation.x = -breath * 0.5;
+      pTorso.position.y = 1.05 + breath;
+      pHead.position.y = 1.55 + breath;
     }
 
     playerGroup.position.copy(playerPos);
     playerGroup.rotation.y = playerYaw;
 
-    if (avatar) {
-      avatar.updateAnimation(dt, isMoving, 1.2);
-    }
-
-    // Update NPCs & Check interaction
-    const nearestNPC = npcSystem.update(dt, playerPos);
+    // Update NPCs & Proximity Dialogue
+    const nearest = npcManager.update(dt, playerPos);
     if (dialogueBox) {
-      if (nearestNPC) {
+      if (nearest) {
         dialogueBox.style.display = 'block';
         dialogueBox.innerHTML = `
-          <div style="font-size:12px; color:#38ada9; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${nearestNPC.name} • ${nearestNPC.role}</div>
-          <div style="font-size:15px; line-height:1.5; color:#f1f2f6;">"${nearestNPC.dialogue}"</div>
+          <div style="font-size:12px; color:#74b9ff; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${nearest.name} • ${nearest.role}</div>
+          <div style="font-size:15px; line-height:1.5; color:#f1f2f6;">"${nearest.dialogue}"</div>
         `;
       } else {
         dialogueBox.style.display = 'none';
       }
     }
 
-    // Dynamic third-person camera follow
+    // Camera follow (exact matching third-person viewpoint)
     const targetCamPos = new THREE.Vector3(
-      playerPos.x * 0.4,
-      playerPos.y + 3.4,
-      playerPos.z + 7.5
+      playerPos.x * 0.35,
+      playerPos.y + 3.2,
+      playerPos.z + 7.2
     );
     camera.position.lerp(targetCamPos, 0.12);
-    camera.lookAt(playerPos.x * 0.2, playerPos.y + 2.0, playerPos.z - 6.0);
+    camera.lookAt(playerPos.x * 0.2, playerPos.y + 1.8, playerPos.z - 7.0);
 
     renderer.render(scene, camera);
 
-    // Update overlay stats
+    // Update UI Stats
     statsEl.innerHTML = `
-      <b style="color:#38ada9">LUMIOSE CENTRAL AVENUE — OPEN WORLD</b><br/>
-      FPS: <span style="color:#2ed573">${fps}</span> | Walking NPCs: <b>${npcSystem.npcs.length}</b><br/>
-      Controls: <b>WASD / Arrow Keys</b> to walk & talk to city NPCs<br/>
-      Landmark: <b>Prism Tower</b> straight ahead down the avenue
+      <b style="color:#74b9ff">CENTRAL AVENUE — REALISTIC JRPG CITY</b><br/>
+      FPS: <span style="color:#2ed573">${fps}</span> | Walking NPCs: <b>${npcManager.npcs.length}</b><br/>
+      Controls: <b>WASD / Arrow Keys</b> to walk & talk with NPCs<br/>
+      Landmark: <b>Prism Tower</b> straight down the boulevard
     `;
   }
 
@@ -418,4 +560,4 @@ async function initLumioseCity() {
   });
 }
 
-initLumioseCity().catch(console.error);
+initRealisticGame().catch(console.error);
