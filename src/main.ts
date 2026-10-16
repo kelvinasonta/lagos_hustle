@@ -674,10 +674,10 @@ function animate() {
       const dx = Math.abs(playerPos.x - v.mesh.position.x);
       const dz = Math.abs(playerPos.z - v.mesh.position.z);
 
-      const hitWidth = v.axis === 'z' ? 1.4 : v.length / 2;
-      const hitLength = v.axis === 'z' ? v.length / 2 : 1.4;
+      const hitWidth = v.axis === 'z' ? 1.8 : v.length / 2 + 0.4;
+      const hitLength = v.axis === 'z' ? v.length / 2 + 0.4 : 1.8;
 
-      if (dx < hitWidth && dz < hitLength && v.currentSpeed > 2.0) {
+      if (dx < hitWidth && dz < hitLength && v.currentSpeed > 1.5) {
         killPlayer(v);
         break;
       }
