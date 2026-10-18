@@ -55,6 +55,33 @@ class LagosAudio {
   }
 
   /**
+   * Celebratory high score & leaderboard climb fanfare
+   */
+  public playLeaderboardFanfare() {
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      // Celebratory ascending fanfare: G4, C5, E5, G5, C6
+      const arpeggio = [392.00, 523.25, 659.25, 783.99, 1046.50];
+      arpeggio.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        const start = t + idx * 0.09;
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.18, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + (idx === arpeggio.length - 1 ? 0.9 : 0.4));
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(start);
+        osc.stop(start + (idx === arpeggio.length - 1 ? 0.95 : 0.45));
+      });
+    } catch (e) {}
+  }
+
+  /**
    * Classic Lagos Danfo dual-tone horn ("Pee-Peeep!!")
    */
   public playDanfoHorn() {

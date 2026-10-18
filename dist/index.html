@@ -355,6 +355,200 @@
         color: #ced6e0;
         cursor: default;
       }
+      /* Leaderboard HUD & Modal */
+      #leaderboard-btn {
+        position: fixed;
+        top: 16px;
+        left: 280px;
+        background: linear-gradient(135deg, rgba(20, 24, 30, 0.95), rgba(30, 36, 48, 0.95));
+        border: 1.5px solid #f7bf1f;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(247, 191, 31, 0.35);
+        color: #fff;
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+        z-index: 125;
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+      }
+      #leaderboard-btn:hover {
+        transform: translateY(-2px) scale(1.04);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 18px rgba(247, 191, 31, 0.6);
+        background: linear-gradient(135deg, rgba(35, 42, 54, 0.98), rgba(45, 54, 72, 0.98));
+      }
+      #leaderboard-btn:active {
+        transform: translateY(1px);
+      }
+      #leaderboard-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(8px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 220;
+      }
+      #leaderboard-window {
+        background: linear-gradient(145deg, #12161f, #0d1017);
+        border: 2px solid #f7bf1f;
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8), 0 0 30px rgba(247, 191, 31, 0.25);
+        border-radius: 16px;
+        width: 92%;
+        max-width: 680px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #leaderboard-header {
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(247, 191, 31, 0.08);
+      }
+      #leaderboard-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      #leaderboard-title {
+        font-size: 20px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        color: #f7bf1f;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #leaderboard-subtitle {
+        font-size: 11px;
+        color: #a4b0be;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      #leaderboard-close {
+        cursor: pointer;
+        background: #232b38;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #ced6e0;
+        font-size: 16px;
+        font-weight: 800;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, color 0.15s;
+      }
+      #leaderboard-close:hover {
+        background: #ff4757;
+        color: #fff;
+      }
+      #leaderboard-my-summary {
+        background: rgba(247, 191, 31, 0.12);
+        border: 1px solid rgba(247, 191, 31, 0.35);
+        margin: 12px 20px 4px 20px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      #leaderboard-my-summary-stats {
+        display: flex;
+        gap: 16px;
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      #leaderboard-body {
+        padding: 12px 20px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .lb-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        text-align: left;
+      }
+      .lb-table th {
+        color: #a4b0be;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .lb-table td {
+        padding: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        color: #e4e7eb;
+      }
+      .lb-row-self {
+        background: rgba(247, 191, 31, 0.18) !important;
+        border-left: 3px solid #f7bf1f;
+        font-weight: bold;
+      }
+      .lb-rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        font-weight: 900;
+        font-size: 12px;
+      }
+      .lb-rank-1 { background: #f1c40f; color: #111; box-shadow: 0 0 10px rgba(241, 196, 15, 0.6); }
+      .lb-rank-2 { background: #bdc3c7; color: #111; box-shadow: 0 0 10px rgba(189, 195, 199, 0.4); }
+      .lb-rank-3 { background: #e67e22; color: #fff; box-shadow: 0 0 10px rgba(230, 126, 34, 0.4); }
+      .lb-rank-other { background: rgba(255, 255, 255, 0.1); color: #a4b0be; }
+      .lb-player-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .lb-color-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      #leaderboard-guest-callout {
+        margin: 12px 20px 16px 20px;
+        background: rgba(46, 213, 115, 0.12);
+        border: 1px solid rgba(46, 213, 115, 0.35);
+        border-radius: 8px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      #leaderboard-signin-btn {
+        background: #2ed573;
+        color: #0d2917;
+        font-weight: 800;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.15s;
+      }
+      #leaderboard-signin-btn:hover {
+        transform: scale(1.05);
+      }
       /* Mobile On-Screen Controls */
       #mobile-controls {
         display: none;
@@ -612,7 +806,7 @@
         color: #f7bf1f;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CALDhWiN.js"></script>
+    <script type="module" crossorigin src="./assets/index-c80EVN-V.js"></script>
   </head>
   <body>
     <!-- Animated Intro Screen using Cover Photo -->
@@ -644,7 +838,7 @@
       </div>
     </div>
 
-    <!-- start.ng Player Profile Card -->
+    <!-- start.ng Player Profile Card & Leaderboard Button -->
     <div class="startng-card" id="player-card" style="position: fixed; top: 16px; left: 16px; display: none; align-items: center; gap: 10px; padding: 6px 14px 6px 8px; border-radius: 999px; background: rgba(20, 24, 30, 0.92); border: 1px solid rgba(247, 191, 31, 0.4); color: #fff; font-family: sans-serif; z-index: 120; backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
       <img id="player-face" alt="" style="width: 36px; height: 36px; border-radius: 50%; background: #f7bf1f; border: 1.5px solid #f7bf1f;" />
       <div>
@@ -652,6 +846,63 @@
         <span id="player-account" style="font-size: 11px; color: #f7bf1f;">@guest</span>
       </div>
       <button id="player-sign-in" style="margin-left: 6px; border: 0; border-radius: 999px; padding: 4px 10px; background: #f7bf1f; color: #111; font-weight: 800; font-size: 11px; cursor: pointer;">Sign In</button>
+    </div>
+
+    <!-- Leaderboard Button -->
+    <button id="leaderboard-btn" title="View Lagos Leaderboard">
+      <span>🏆</span>
+      <span>LEADERBOARD</span>
+    </button>
+
+    <!-- Leaderboard Modal -->
+    <div id="leaderboard-modal">
+      <div id="leaderboard-window">
+        <div id="leaderboard-header">
+          <div id="leaderboard-header-left">
+            <div>
+              <div id="leaderboard-title">🏆 LAGOS HUSTLE LEADERBOARD</div>
+              <div id="leaderboard-subtitle">Top Couriers & Hustlers across Lagos Island & Mainland</div>
+            </div>
+          </div>
+          <button id="leaderboard-close" title="Close">✕</button>
+        </div>
+
+        <div id="leaderboard-my-summary">
+          <div>
+            <span style="color: #a4b0be; font-size: 11px; text-transform: uppercase; font-weight: 700;">YOUR CURRENT STATS:</span>
+            <div id="my-summary-name" style="font-weight: 800; font-size: 13px; color: #fff;">Lagos Hustler</div>
+          </div>
+          <div id="leaderboard-my-summary-stats">
+            <div>₦<span id="my-stat-earnings">0</span></div>
+            <div>📦 <span id="my-stat-deliveries">0</span></div>
+            <div>📍 <span id="my-stat-distance">0</span> km</div>
+            <div>⏱️ <span id="my-stat-lap">--:--</span></div>
+          </div>
+        </div>
+
+        <div id="leaderboard-guest-callout" style="display: none;">
+          <span>💡 <b>Guest Mode:</b> Sign in with your start.ng account to save your best runs and rank on the live board!</span>
+          <button id="leaderboard-signin-btn">Sign In to Rank</button>
+        </div>
+
+        <div id="leaderboard-body">
+          <div id="leaderboard-loading" style="text-align: center; padding: 30px; color: #a4b0be;">Loading Lagos rankings...</div>
+          <table class="lb-table" id="leaderboard-table" style="display: none;">
+            <thead>
+              <tr>
+                <th style="width: 50px;">Rank</th>
+                <th>Hustler</th>
+                <th style="text-align: right;">Earnings</th>
+                <th style="text-align: center;">Deliveries</th>
+                <th style="text-align: center;">Distance</th>
+                <th style="text-align: right;">Best Lap</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-rows">
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div id="canvas-container"></div>

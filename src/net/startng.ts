@@ -118,6 +118,105 @@ export async function askStartNg<T = any>(message: Record<string, any>, replyTyp
   }
 }
 
+export interface LeaderboardEntry {
+  rank: number;
+  player_id: number;
+  name: string;
+  color?: string;
+  score?: number;
+  stats?: {
+    earnings?: number;
+    deliveries?: number;
+    distance_km?: number;
+    best_time?: number;
+    [key: string]: any;
+  };
+}
+
+export interface ScoreSubmissionResult {
+  ok: boolean;
+  error?: string;
+  result?: {
+    best: number;
+    improved: boolean;
+    rank: number;
+    stats: {
+      earnings: number;
+      deliveries: number;
+      distance_km: number;
+      best_time: number;
+    };
+  };
+}
+
+export interface GameStats {
+  earnings: number;
+  deliveries: number;
+  distance_km: number;
+  best_time: number;
+}
+
+export async function submitScore(stats: GameStats): Promise<ScoreSubmissionResult | null> {
+  // Try HTTP API first if session is available in sessionStorage
+  const sessionToken = sessionStorage.getItem('startng_session');
+  const gameName = window.location.hostname.split('.')[0] || 'lagos-hustle';
+
+  if (sessionToken) {
+    try {
+      const res = await fetch(`https://api.start.ng/games/${gameName}/scores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({ stats })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return { ok: true, result: json };
+      }
+    } catch (e) {
+      console.warn('HTTP score save failed, falling back to connect iframe:', e);
+    }
+  }
+
+  // Fallback to connect iframe postMessage
+  const reply = await askStartNg<any>(
+    { type: 'startng:score', stats },
+    'startng:scoreSaved',
+    4000
+  );
+  return reply;
+}
+
+export async function fetchLeaderboard(limit = 15): Promise<LeaderboardEntry[]> {
+  const gameName = window.location.hostname.split('.')[0] || 'lagos-hustle';
+
+  // Try HTTP first
+  try {
+    const res = await fetch(`https://api.start.ng/games/${gameName}/leaderboard?limit=${limit}`);
+    if (res.ok) {
+      const entries = await res.json();
+      if (Array.isArray(entries)) {
+        return entries;
+      }
+    }
+  } catch (e) {
+    console.warn('HTTP leaderboard fetch failed, falling back to connect:', e);
+  }
+
+  // Fallback to iframe
+  const reply = await askStartNg<any>(
+    { type: 'startng:leaderboard', limit },
+    'startng:leaderboardData',
+    4000
+  );
+  if (reply?.entries && Array.isArray(reply.entries)) {
+    return reply.entries;
+  }
+  return [];
+}
+
 export function redirectToSignIn() {
   const returnTo = encodeURIComponent(window.location.origin + window.location.pathname);
   window.location.href = `https://start.ng/?return_to=${returnTo}`;

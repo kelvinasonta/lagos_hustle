@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AvatarGenerator } from './character/AvatarGenerator';
-import { askStartNg, WhoAmIReply, StartNgUser } from './net/startng';
+import { askStartNg, WhoAmIReply, StartNgUser, submitScore, fetchLeaderboard, GameStats, redirectToSignIn } from './net/startng';
 import { createVehicle, VehicleType } from './vehicles/DanfoGenerator';
 import { lagosAudio } from './audio/LagosAudio';
 
@@ -832,6 +832,7 @@ interface TrafficVehicle {
   maxBound: number;
   laneCoord: number; // Constant coordinate (X for north/south, Z for east/west)
   length: number;    // Approx length of vehicle
+  honkCooldown?: number;
 }
 
 const trafficVehicles: TrafficVehicle[] = [];
@@ -1316,6 +1317,9 @@ interface HustleMission {
 
 let playerEarnings = 0;
 let completedDeliveries = 0;
+let totalDistanceMeters = 0;
+let bestDeliverySeconds = 0; // In seconds, 0 = no delivery yet
+let lastRecordedPlayerPos: THREE.Vector3 | null = null;
 let currentMissionIndex = 0;
 let currentStage: MissionStage = 'pickup';
 
@@ -1486,6 +1490,167 @@ if (shopCloseBtnEl && shopModalEl) {
   });
 }
 
+// Leaderboard UI and Sync System
+const leaderboardBtnEl = document.getElementById('leaderboard-btn');
+const leaderboardModalEl = document.getElementById('leaderboard-modal');
+const leaderboardCloseBtnEl = document.getElementById('leaderboard-close');
+const leaderboardRowsEl = document.getElementById('leaderboard-rows');
+const leaderboardLoadingEl = document.getElementById('leaderboard-loading');
+const leaderboardTableEl = document.getElementById('leaderboard-table');
+const leaderboardGuestCalloutEl = document.getElementById('leaderboard-guest-callout');
+const leaderboardSignInBtnEl = document.getElementById('leaderboard-signin-btn');
+
+const mySummaryNameEl = document.getElementById('my-summary-name');
+const myStatEarningsEl = document.getElementById('my-stat-earnings');
+const myStatDeliveriesEl = document.getElementById('my-stat-deliveries');
+const myStatDistanceEl = document.getElementById('my-stat-distance');
+const myStatLapEl = document.getElementById('my-stat-lap');
+
+function formatSecondsToTime(sec: number): string {
+  if (!sec || sec <= 0) return '--:--';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+function updateLeaderboardSummaryHUD() {
+  if (mySummaryNameEl) mySummaryNameEl.textContent = currentUser?.name || 'Lagos Hustler';
+  if (myStatEarningsEl) myStatEarningsEl.textContent = Math.round(playerEarnings).toLocaleString();
+  if (myStatDeliveriesEl) myStatDeliveriesEl.textContent = completedDeliveries.toString();
+  const km = (totalDistanceMeters / 1000).toFixed(1);
+  if (myStatDistanceEl) myStatDistanceEl.textContent = km;
+  if (myStatLapEl) myStatLapEl.textContent = formatSecondsToTime(bestDeliverySeconds);
+
+  const isSignedIn = !!(sessionStorage.getItem('startng_session') || (currentUser && currentUser.id !== 0));
+  if (leaderboardGuestCalloutEl) {
+    leaderboardGuestCalloutEl.style.display = isSignedIn ? 'none' : 'flex';
+  }
+}
+
+let isSavingScore = false;
+let lastSavedStatsString = '';
+
+async function syncScoreToLeaderboard(notifyOnImprovement = false) {
+  // Only attempt saving if player has accomplished something
+  if (playerEarnings === 0 && completedDeliveries === 0 && totalDistanceMeters < 100) return;
+  if (isSavingScore) return;
+
+  const currentStats: GameStats = {
+    earnings: Math.max(0, Math.round(playerEarnings)),
+    deliveries: Math.max(0, completedDeliveries),
+    distance_km: Math.max(0, Math.floor(totalDistanceMeters / 1000)),
+    best_time: Math.max(1, Math.round(bestDeliverySeconds || 90))
+  };
+
+  const statsStr = JSON.stringify(currentStats);
+  if (statsStr === lastSavedStatsString && !notifyOnImprovement) return;
+
+  isSavingScore = true;
+  try {
+    const res = await submitScore(currentStats);
+    if (res && res.ok) {
+      lastSavedStatsString = statsStr;
+      if (res.result?.improved) {
+        lagosAudio.playLeaderboardFanfare();
+        if (toastEl) {
+          const rankStr = res.result.rank ? ` #` + res.result.rank : '';
+          toastEl.textContent = `🌟 NEW PERSONAL BEST ON LEADERBOARD${rankStr}! ₦${currentStats.earnings.toLocaleString()}`;
+          toastEl.style.display = 'block';
+          setTimeout(() => { toastEl.style.display = 'none'; }, 4000);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Leaderboard score sync error:', err);
+  } finally {
+    isSavingScore = false;
+  }
+}
+
+async function renderLeaderboardModal() {
+  updateLeaderboardSummaryHUD();
+  if (leaderboardLoadingEl) leaderboardLoadingEl.style.display = 'block';
+  if (leaderboardTableEl) leaderboardTableEl.style.display = 'none';
+
+  // Trigger quick background sync of current stats
+  syncScoreToLeaderboard(false);
+
+  const entries = await fetchLeaderboard(25);
+  if (leaderboardLoadingEl) leaderboardLoadingEl.style.display = 'none';
+
+  if (!entries || entries.length === 0) {
+    if (leaderboardRowsEl) {
+      leaderboardRowsEl.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #a4b0be; padding: 24px;">No runs recorded yet on start.ng. Be the first to rank on Lagos Hustle!</td></tr>`;
+    }
+    if (leaderboardTableEl) leaderboardTableEl.style.display = 'table';
+    return;
+  }
+
+  if (leaderboardRowsEl) {
+    leaderboardRowsEl.innerHTML = '';
+    entries.forEach((entry, idx) => {
+      const isSelf = currentUser && currentUser.id !== 0 && entry.player_id === currentUser.id;
+      const rank = entry.rank || idx + 1;
+      let badgeClass = 'lb-rank-other';
+      if (rank === 1) badgeClass = 'lb-rank-1';
+      else if (rank === 2) badgeClass = 'lb-rank-2';
+      else if (rank === 3) badgeClass = 'lb-rank-3';
+
+      const stats = entry.stats || {};
+      const earnings = Number(stats.earnings ?? entry.score ?? 0);
+      const deliveries = Number(stats.deliveries ?? 0);
+      const distance = Number(stats.distance_km ?? 0);
+      const bestTimeSec = Number(stats.best_time ?? 0);
+
+      const tr = document.createElement('tr');
+      if (isSelf) tr.classList.add('lb-row-self');
+
+      tr.innerHTML = `
+        <td><span class="lb-rank-badge ${badgeClass}">${rank}</span></td>
+        <td>
+          <div class="lb-player-cell">
+            <span class="lb-color-dot" style="background: ${entry.color || '#f7bf1f'};"></span>
+            <span style="font-weight: ${isSelf ? '900' : '700'}; color: ${isSelf ? '#f7bf1f' : '#fff'};">${entry.name || 'Anonymous'}${isSelf ? ' (YOU)' : ''}</span>
+          </div>
+        </td>
+        <td style="text-align: right; font-family: monospace; font-weight: 800; color: #2ed573;">₦${earnings.toLocaleString()}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: 700;">${deliveries}</td>
+        <td style="text-align: center; font-family: monospace; font-weight: 700;">${distance} km</td>
+        <td style="text-align: right; font-family: monospace; font-weight: 700; color: #f7bf1f;">${formatSecondsToTime(bestTimeSec)}</td>
+      `;
+      leaderboardRowsEl.appendChild(tr);
+    });
+  }
+  if (leaderboardTableEl) leaderboardTableEl.style.display = 'table';
+}
+
+if (leaderboardBtnEl && leaderboardModalEl) {
+  leaderboardBtnEl.addEventListener('click', () => {
+    leaderboardModalEl.style.display = 'flex';
+    renderLeaderboardModal();
+  });
+}
+
+if (leaderboardCloseBtnEl && leaderboardModalEl) {
+  leaderboardCloseBtnEl.addEventListener('click', () => {
+    leaderboardModalEl.style.display = 'none';
+  });
+}
+
+if (leaderboardModalEl) {
+  leaderboardModalEl.addEventListener('click', (e) => {
+    if (e.target === leaderboardModalEl) {
+      leaderboardModalEl.style.display = 'none';
+    }
+  });
+}
+
+if (leaderboardSignInBtnEl) {
+  leaderboardSignInBtnEl.addEventListener('click', () => {
+    redirectToSignIn();
+  });
+}
+
 // Shop Purchases
 if (buyTurboBtnEl) {
   buyTurboBtnEl.addEventListener('click', () => {
@@ -1500,6 +1665,7 @@ if (buyTurboBtnEl) {
       });
       lagosAudio.playCashChime(true);
       updateMissionHUD();
+      syncScoreToLeaderboard(false);
     }
   });
 }
@@ -1514,6 +1680,7 @@ if (buyOutfitBtnEl) {
       if (avatar) avatar.setOutfit(0x00ff88, 0x1e272e); // Neon vest
       lagosAudio.playCashChime(true);
       updateMissionHUD();
+      syncScoreToLeaderboard(false);
     }
   });
 }
@@ -1528,6 +1695,7 @@ if (buyAgbadaBtnEl) {
       if (avatar) avatar.setOutfit(0xf1c40f, 0xf39c12); // Golden Agbada
       lagosAudio.playCashChime(true);
       updateMissionHUD();
+      syncScoreToLeaderboard(false);
     }
   });
 }
@@ -1541,6 +1709,7 @@ if (buyHotboxBtnEl) {
       buyHotboxBtnEl.classList.add('bought');
       lagosAudio.playCashChime(true);
       updateMissionHUD();
+      syncScoreToLeaderboard(false);
     }
   });
 }
@@ -1658,6 +1827,12 @@ function triggerStageTransition() {
       tipBonus = hasHotBox ? 2000 : 1000;
     }
 
+    // Track delivery time taken (lap duration in seconds)
+    const lapSeconds = Math.max(1, Math.round(TOTAL_STAGE_TIME - stageTimeRemaining));
+    if (bestDeliverySeconds === 0 || lapSeconds < bestDeliverySeconds) {
+      bestDeliverySeconds = lapSeconds;
+    }
+
     const totalEarned = current.reward + tipBonus;
     playerEarnings += totalEarned;
     completedDeliveries++;
@@ -1675,6 +1850,9 @@ function triggerStageTransition() {
         toastEl.style.display = 'none';
       }, 3500);
     }
+
+    // Sync delivery completion directly to start.ng leaderboard!
+    syncScoreToLeaderboard(true);
   }
 
   updateMissionHUD();
@@ -1994,6 +2172,7 @@ function animate() {
       const vRadius = currentVehicle.type === 'bicycle' || currentVehicle.type === 'scooter' ? 0.6 : 1.4;
 
       function vCollides(cx: number, cz: number): boolean {
+        // World static obstacle colliders
         for (const obs of worldColliders) {
           if (
             cx + vRadius > obs.minX &&
@@ -2004,13 +2183,22 @@ function animate() {
             return true;
           }
         }
+        // Active traffic vehicles solid physical collisions (no car can go into player vehicle!)
+        for (const tv of trafficVehicles) {
+          const tRadius = tv.axis === 'z' ? tv.length * 0.45 : 1.4;
+          const distSq = (cx - tv.mesh.position.x) ** 2 + (cz - tv.mesh.position.z) ** 2;
+          const minSafeDist = vRadius + tRadius;
+          if (distSq < minSafeDist * minSafeDist) {
+            return true;
+          }
+        }
         return false;
       }
 
       if (!vCollides(nextX, currentVehicle.pos.z)) {
         currentVehicle.pos.x = nextX;
       } else {
-        currentVehicle.speed *= 0.3; // Dampen speed on curb impact
+        currentVehicle.speed *= 0.3; // Dampen speed on impact
       }
       if (!vCollides(currentVehicle.pos.x, nextZ)) {
         currentVehicle.pos.z = nextZ;
@@ -2129,6 +2317,18 @@ function animate() {
     }
   }
 
+  // Accumulate distance traveled in meters
+  if (lastRecordedPlayerPos) {
+    const moved = lastRecordedPlayerPos.distanceTo(playerPos);
+    // Ignore respawn teleports (> 20 meters in one frame)
+    if (moved > 0.001 && moved < 20.0) {
+      totalDistanceMeters += moved;
+    }
+  } else {
+    lastRecordedPlayerPos = new THREE.Vector3();
+  }
+  lastRecordedPlayerPos.copy(playerPos);
+
   playerGroup.position.copy(playerPos);
   if (!isDead) {
     playerGroup.rotation.y = playerYaw;
@@ -2147,8 +2347,8 @@ function animate() {
   camera.position.lerp(targetCamPos, 0.15);
   camera.lookAt(playerPos.x, playerPos.y + 1.3, playerPos.z);
 
-  // Check Hit Collision between Player and Moving Cars
-  if (!isDead) {
+  // Check Hit Collision between Player and Moving Cars (Player CANNOT be killed while driving a vehicle!)
+  if (!isDead && !currentVehicle) {
     for (const v of trafficVehicles) {
       const dx = Math.abs(playerPos.x - v.mesh.position.x);
       const dz = Math.abs(playerPos.z - v.mesh.position.z);
@@ -2169,6 +2369,54 @@ function animate() {
 
   for (const v of trafficVehicles) {
     let targetSpeed = v.baseSpeed;
+
+    // Update honk cooldown for vehicle
+    if (v.honkCooldown && v.honkCooldown > 0) {
+      v.honkCooldown -= dt;
+    }
+
+    // 0. Check for Player (on foot or in vehicle) directly ahead in vehicle path
+    // If player is in front, car must STOP and HONK!
+    const playerTargetPos = currentVehicle ? currentVehicle.pos : playerPos;
+    let playerDistAhead = -1;
+    let isDirectlyInLane = false;
+
+    if (v.axis === 'z') {
+      // Main Avenue North/South lanes
+      isDirectlyInLane = Math.abs(v.mesh.position.x - playerTargetPos.x) < 2.5;
+      if (isDirectlyInLane) {
+        if (v.direction === 'north') { // Car moving towards -Z
+          playerDistAhead = v.mesh.position.z - playerTargetPos.z;
+        } else { // Car moving towards +Z
+          playerDistAhead = playerTargetPos.z - v.mesh.position.z;
+        }
+      }
+    } else {
+      // Cross Street East/West lanes
+      isDirectlyInLane = Math.abs(v.mesh.position.z - playerTargetPos.z) < 2.5;
+      if (isDirectlyInLane) {
+        if (v.direction === 'east') { // Car moving towards +X
+          playerDistAhead = playerTargetPos.x - v.mesh.position.x;
+        } else { // Car moving towards -X
+          playerDistAhead = v.mesh.position.x - playerTargetPos.x;
+        }
+      }
+    }
+
+    if (playerDistAhead > 0 && playerDistAhead < 22.0) {
+      if (playerDistAhead < 8.0) {
+        targetSpeed = 0; // FULL EMERGENCY STOP!
+      } else {
+        const ratio = (playerDistAhead - 8.0) / 14.0;
+        targetSpeed = Math.min(targetSpeed, v.baseSpeed * Math.max(0, ratio * 0.5));
+      }
+
+      // HONK HORN at player blocking the road!
+      if (!v.honkCooldown || v.honkCooldown <= 0) {
+        v.honkCooldown = 2.0 + Math.random() * 1.5; // Honk every 2-3 seconds
+        lagosAudio.playDanfoHorn();
+      }
+    }
 
     // 1. Check for leading vehicle directly ahead in the same lane
     for (const other of trafficVehicles) {
