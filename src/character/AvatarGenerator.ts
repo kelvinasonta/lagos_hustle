@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { StartNgUser } from '../net/startng';
 
-// Exact start.ng standard constants from official start.ng character architecture
+// Exact start.ng standard constants from start.ng character architecture
 const HAT_LIFT: Record<string, number> = {
   short: 0.08,
-  afro: 0.3,
+  afro: 0.28,
   braids: 0.08,
   bun: 0.08,
   ponytail: 0.08,
@@ -13,29 +13,15 @@ const HAT_LIFT: Record<string, number> = {
 };
 
 const BLACK = new THREE.MeshStandardMaterial({ color: '#1b1b22', roughness: 0.5 });
-const GOLD = new THREE.MeshStandardMaterial({ color: '#ffcf4d', metalness: 0.6, roughness: 0.3 });
-
-function createBox(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function createMesh(geometry: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const m = new THREE.Mesh(geometry, mat);
-  m.position.set(x, y, z);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
-}
+const GOLD = new THREE.MeshStandardMaterial({ color: '#ffcf4d', metalness: 0.7, roughness: 0.25 });
 
 /**
- * Full start.ng character model matching the official start.ng character generator:
- * - Blocky retro-modern proportions (0.75x0.85x0.45 torso, 0.6x0.6x0.6 head)
- * - True start.ng body proportions, limbs, head, hats, hairs, and accessories
- * - Scaled smoothly for world gameplay navigation, walking, and bike/vehicle riding
+ * Natural Humanoid Stylized Character Generator for start.ng:
+ * - Natural anatomical contours with smooth curves, shoulders, tapered limbs and waist.
+ * - Distinct male (broad athletic shoulders, straight torso) and female (slender, tapered waist, optional skirt) anatomy.
+ * - Clean sculpted head with curved jawline, expressive eyes, authentic hair shapes, hats and accessories.
+ * - Fully mapped to all start.ng style fields (body, primaryColor, secondaryColor, skinColor, hairColor, hair, hat, accessory).
+ * - Full walking, running, and vehicle-riding animations (pedaling bicycle, Okada courier stance, and seated driving).
  */
 export class AvatarGenerator {
   public group: THREE.Group;
@@ -46,8 +32,8 @@ export class AvatarGenerator {
   public leftLeg: THREE.Group;
   public rightLeg: THREE.Group;
   public head: THREE.Group;
-  public torso: THREE.Mesh;
-  public skirt: THREE.Mesh;
+  public torso: THREE.Group;
+  public skirt?: THREE.Mesh;
   public shirtMat: THREE.MeshStandardMaterial;
   public pantsMat: THREE.MeshStandardMaterial;
   public skinMat: THREE.MeshStandardMaterial;
@@ -63,9 +49,7 @@ export class AvatarGenerator {
 
   constructor(user: StartNgUser) {
     this.group = new THREE.Group();
-    // Scaling uniformly so standard start.ng block character fits game scale
     this.characterMesh = new THREE.Group();
-    this.characterMesh.scale.set(0.85, 0.85, 0.85);
     this.group.add(this.characterMesh);
 
     this.bodyGroup = new THREE.Group();
@@ -74,64 +58,85 @@ export class AvatarGenerator {
     // Extract style with start.ng fallbacks
     const style = user.style || ({} as any);
     const skinColor = style.skinColor || '#d9a066';
-    const primaryColor = style.primaryColor || '#9aa3b5'; // Top
-    const secondaryColor = style.secondaryColor || '#4a4f60'; // Trousers / Skirt
-    const hairColor = style.hairColor || '#2b1d14';
+    const primaryColor = style.primaryColor || '#4b7bec'; // Top
+    const secondaryColor = style.secondaryColor || '#2f3640'; // Trousers
+    const hairColor = style.hairColor || '#17120f';
     const hairType = style.hair || 'short';
     const hatType = style.hat || 'none';
     const accessoryType = style.accessory || 'none';
     const isFemale = style.body === 'female';
 
     // Materials
-    this.shirtMat = new THREE.MeshStandardMaterial({ color: primaryColor, roughness: 0.6 });
-    this.pantsMat = new THREE.MeshStandardMaterial({ color: secondaryColor, roughness: 0.7 });
-    this.skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8 });
-    this.hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 });
+    this.shirtMat = new THREE.MeshStandardMaterial({ color: primaryColor, roughness: 0.65 });
+    this.pantsMat = new THREE.MeshStandardMaterial({ color: secondaryColor, roughness: 0.75 });
+    this.skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 });
+    this.hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.85 });
 
-    // Limbs pivot at hip/shoulder
-    const createLimb = (x: number, y: number, mat: THREE.Material, length: number, width: number) => {
-      const pivot = new THREE.Group();
-      pivot.position.set(x, y, 0);
-      pivot.add(createBox(width, length, width, mat, 0, -length / 2, 0));
-      this.bodyGroup.add(pivot);
-      return pivot;
-    };
+    // 1. Natural Torso & Chest
+    this.torso = new THREE.Group();
+    this.torso.position.y = 1.02;
 
-    // Legs (Pivot at y=0.8)
-    this.leftLeg = createLimb(-0.18, 0.8, this.pantsMat, 0.8, 0.28);
-    this.rightLeg = createLimb(0.18, 0.8, this.pantsMat, 0.8, 0.28);
+    const chestRadiusTop = isFemale ? 0.22 : 0.27;
+    const chestRadiusBot = isFemale ? 0.17 : 0.21;
+    const chestGeom = new THREE.CylinderGeometry(chestRadiusTop, chestRadiusBot, 0.62, 14);
+    const chestMesh = new THREE.Mesh(chestGeom, this.shirtMat);
+    chestMesh.castShadow = true;
+    chestMesh.receiveShadow = true;
+    this.torso.add(chestMesh);
 
-    // Shoes details on legs
-    this.leftLeg.add(createBox(0.28, 0.14, 0.36, BLACK, 0, -0.73, 0.04));
-    this.rightLeg.add(createBox(0.28, 0.14, 0.36, BLACK, 0, -0.73, 0.04));
+    // Collar / neckline detail
+    const collarGeom = new THREE.TorusGeometry(isFemale ? 0.15 : 0.18, 0.035, 8, 16);
+    const collar = new THREE.Mesh(collarGeom, this.shirtMat);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.y = 0.31;
+    this.torso.add(collar);
 
-    // Torso (0.75w x 0.85h x 0.45d) centered at y=1.225
-    this.torso = createBox(0.75, 0.85, 0.45, this.shirtMat, 0, 1.225, 0);
-    this.torso.scale.x = isFemale ? 0.88 : 1.0;
+    // Female Skirt or Hip Belt
+    if (isFemale) {
+      const skirtGeom = new THREE.CylinderGeometry(0.2, 0.34, 0.36, 14);
+      this.skirt = new THREE.Mesh(skirtGeom, this.pantsMat);
+      this.skirt.position.y = -0.32;
+      this.skirt.castShadow = true;
+      this.torso.add(this.skirt);
+    } else {
+      // Masculine belt/hip ring
+      const beltGeom = new THREE.CylinderGeometry(0.22, 0.22, 0.08, 14);
+      const belt = new THREE.Mesh(beltGeom, this.pantsMat);
+      belt.position.y = -0.31;
+      this.torso.add(belt);
+    }
+
     this.bodyGroup.add(this.torso);
 
-    // Skirt (shown for female body)
-    this.skirt = createBox(0.82, 0.32, 0.52, this.pantsMat, 0, 0.74, 0);
-    this.skirt.visible = isFemale;
-    this.bodyGroup.add(this.skirt);
-
-    // Arms (Pivot at shoulder y=1.6)
-    this.leftArm = createLimb(-0.5, 1.6, this.shirtMat, 0.7, 0.22);
-    this.rightArm = createLimb(0.5, 1.6, this.shirtMat, 0.7, 0.22);
-    // Hands
-    this.leftArm.add(createBox(0.2, 0.18, 0.2, this.skinMat, 0, -0.78, 0));
-    this.rightArm.add(createBox(0.2, 0.18, 0.2, this.skinMat, 0, -0.78, 0));
-
-    // Head (0.6 cube at y=1.95)
+    // 2. Head, Neck & Face Features
     this.head = new THREE.Group();
-    this.head.position.y = 1.95;
-    this.bodyGroup.add(this.head);
+    this.head.position.y = 1.56;
 
-    // Head base box
-    this.head.add(createBox(0.6, 0.6, 0.6, this.skinMat));
-    // Eyes: face looks towards +z (in game orientation, front is +z)
-    this.head.add(createBox(0.1, 0.12, 0.02, BLACK, -0.13, 0.05, 0.31));
-    this.head.add(createBox(0.1, 0.12, 0.02, BLACK, 0.13, 0.05, 0.31));
+    // Curved athletic neck
+    const neckGeom = new THREE.CylinderGeometry(0.08, 0.1, 0.16, 10);
+    const neck = new THREE.Mesh(neckGeom, this.skinMat);
+    neck.position.y = -0.15;
+    this.head.add(neck);
+
+    // Natural curved head silhouette
+    const headGeom = new THREE.SphereGeometry(0.22, 16, 16);
+    headGeom.scale(1.0, 1.15, 1.05);
+    const headMesh = new THREE.Mesh(headGeom, this.skinMat);
+    headMesh.castShadow = true;
+    this.head.add(headMesh);
+
+    // Expressive Eyes with pupil and white sclera (looking forward +z)
+    const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const eyeIrisMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    [-0.07, 0.07].forEach((x) => {
+      const eyeWhite = new THREE.Mesh(new THREE.PlaneGeometry(0.055, 0.05), eyeWhiteMat);
+      eyeWhite.position.set(x, 0.03, 0.222);
+      this.head.add(eyeWhite);
+
+      const pupil = new THREE.Mesh(new THREE.PlaneGeometry(0.032, 0.038), eyeIrisMat);
+      pupil.position.set(x, 0.03, 0.226);
+      this.head.add(pupil);
+    });
 
     // Slots for Hair, Hats, and Accessories
     this.hairSlot = new THREE.Group();
@@ -139,119 +144,195 @@ export class AvatarGenerator {
 
     this.hatSlot = new THREE.Group();
     const lift = HAT_LIFT[hairType] ?? HAT_LIFT.short;
-    this.hatSlot.position.y = 0.3 + lift;
+    this.hatSlot.position.y = 0.2 + lift;
     this.head.add(this.hatSlot);
 
     this.accessorySlot = new THREE.Group();
     this.bodyGroup.add(this.accessorySlot);
 
-    // Build Hair
+    this.bodyGroup.add(this.head);
+
+    // 3. Natural Contoured Arms
+    const armX = isFemale ? 0.31 : 0.36;
+    const armRadiusTop = isFemale ? 0.065 : 0.085;
+    const armRadiusBot = isFemale ? 0.055 : 0.07;
+
+    // Left Arm
+    this.leftArm = new THREE.Group();
+    this.leftArm.position.set(-armX, 1.28, 0);
+    const lArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(armRadiusTop, armRadiusBot, 0.54, 10), this.shirtMat);
+    lArmMesh.position.y = -0.22;
+    lArmMesh.castShadow = true;
+    this.leftArm.add(lArmMesh);
+    const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), this.skinMat);
+    lHand.position.y = -0.52;
+    this.leftArm.add(lHand);
+    this.bodyGroup.add(this.leftArm);
+
+    // Right Arm
+    this.rightArm = new THREE.Group();
+    this.rightArm.position.set(armX, 1.28, 0);
+    const rArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(armRadiusTop, armRadiusBot, 0.54, 10), this.shirtMat);
+    rArmMesh.position.y = -0.22;
+    rArmMesh.castShadow = true;
+    this.rightArm.add(rArmMesh);
+    const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), this.skinMat);
+    rHand.position.y = -0.52;
+    this.rightArm.add(rHand);
+    this.bodyGroup.add(this.rightArm);
+
+    // 4. Natural Contoured Legs
+    const legX = isFemale ? 0.12 : 0.14;
+    const legRadiusTop = isFemale ? 0.085 : 0.1;
+    const legRadiusBot = isFemale ? 0.07 : 0.08;
+
+    // Left Leg
+    this.leftLeg = new THREE.Group();
+    this.leftLeg.position.set(-legX, 0.72, 0);
+    const lLegMesh = new THREE.Mesh(new THREE.CylinderGeometry(legRadiusTop, legRadiusBot, 0.66, 10), this.pantsMat);
+    lLegMesh.position.y = -0.28;
+    lLegMesh.castShadow = true;
+    this.leftLeg.add(lLegMesh);
+    // Shoes
+    const shoeGeom = new THREE.BoxGeometry(0.16, 0.12, 0.28);
+    const lShoe = new THREE.Mesh(shoeGeom, BLACK);
+    lShoe.position.set(0, -0.63, 0.04);
+    lShoe.castShadow = true;
+    this.leftLeg.add(lShoe);
+    this.bodyGroup.add(this.leftLeg);
+
+    // Right Leg
+    this.rightLeg = new THREE.Group();
+    this.rightLeg.position.set(legX, 0.72, 0);
+    const rLegMesh = new THREE.Mesh(new THREE.CylinderGeometry(legRadiusTop, legRadiusBot, 0.66, 10), this.pantsMat);
+    rLegMesh.position.y = -0.28;
+    rLegMesh.castShadow = true;
+    this.rightLeg.add(rLegMesh);
+    const rShoe = new THREE.Mesh(shoeGeom, BLACK);
+    rShoe.position.set(0, -0.63, 0.04);
+    rShoe.castShadow = true;
+    this.rightLeg.add(rShoe);
+    this.bodyGroup.add(this.rightLeg);
+
+    // Build Hair, Hat, and Accessories
     this.buildHair(hairType);
-
-    // Build Hat
     this.buildHat(hatType);
-
-    // Build Accessory
     this.buildAccessory(accessoryType);
   }
 
   private buildHair(type: string) {
-    const hairTop = () => [
-      createBox(0.64, 0.12, 0.64, this.hairMat, 0, 0.34, 0),
-      createBox(0.64, 0.42, 0.08, this.hairMat, 0, 0.1, -0.31) // back of head is -z in model space
-    ];
-
     if (type === 'afro') {
-      const afro = createMesh(new THREE.SphereGeometry(0.42, 14, 10), this.hairMat, 0, 0.24, -0.06);
-      afro.scale.y = 0.9;
+      const afro = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 14), this.hairMat);
+      afro.position.set(0, 0.12, -0.02);
       this.hairSlot.add(afro);
     } else if (type === 'braids') {
-      this.hairSlot.add(...hairTop());
-      [-0.24, -0.12, 0, 0.12, 0.24].forEach((x) => {
-        this.hairSlot.add(createBox(0.08, 0.75, 0.08, this.hairMat, x, -0.2, -0.35));
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.hairMat);
+      cap.position.y = 0.08;
+      this.hairSlot.add(cap);
+      [-0.15, -0.07, 0, 0.07, 0.15].forEach((x) => {
+        const braid = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 6), this.hairMat);
+        braid.position.set(x, -0.15, -0.18);
+        this.hairSlot.add(braid);
       });
     } else if (type === 'bun') {
-      this.hairSlot.add(...hairTop());
-      this.hairSlot.add(createMesh(new THREE.SphereGeometry(0.17, 12, 8), this.hairMat, 0, 0.45, -0.16));
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.hairMat);
+      cap.position.y = 0.08;
+      this.hairSlot.add(cap);
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), this.hairMat);
+      bun.position.set(0, 0.26, -0.12);
+      this.hairSlot.add(bun);
     } else if (type === 'ponytail') {
-      const tail = createBox(0.14, 0.55, 0.14, this.hairMat, 0, -0.05, -0.42);
-      tail.rotation.x = 0.35;
-      this.hairSlot.add(...hairTop(), tail, createBox(0.17, 0.08, 0.17, this.shirtMat, 0, 0.2, -0.36));
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.hairMat);
+      cap.position.y = 0.08;
+      this.hairSlot.add(cap);
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.025, 0.38, 8), this.hairMat);
+      tail.position.set(0, 0.05, -0.25);
+      tail.rotation.x = -Math.PI / 4;
+      this.hairSlot.add(tail);
     } else if (type === 'dreads') {
-      this.hairSlot.add(...hairTop());
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.hairMat);
+      cap.position.y = 0.08;
+      this.hairSlot.add(cap);
       for (let i = 0; i < 9; i++) {
-        const a = -2 + i * 0.5;
-        this.hairSlot.add(
-          createMesh(
-            new THREE.CylinderGeometry(0.045, 0.045, 0.65, 6),
-            this.hairMat,
-            Math.sin(a) * 0.33,
-            -0.1,
-            -Math.cos(a) * 0.33
-          )
-        );
+        const a = -2.2 + i * 0.55;
+        const dread = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 6), this.hairMat);
+        dread.position.set(Math.sin(a) * 0.22, -0.1, Math.cos(a) * 0.22);
+        this.hairSlot.add(dread);
       }
     } else if (type !== 'bald') {
-      // short / default
-      this.hairSlot.add(
-        createBox(0.64, 0.12, 0.64, this.hairMat, 0, 0.34, 0),
-        createBox(0.64, 0.3, 0.08, this.hairMat, 0, 0.17, -0.31)
-      );
+      // Natural short hair cap
+      const shortHair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.hairMat);
+      shortHair.position.set(0, 0.06, -0.03);
+      shortHair.scale.set(1.04, 1.05, 1.1);
+      this.hairSlot.add(shortHair);
     }
   }
 
   private buildHat(type: string) {
     if (type === 'cap') {
-      this.hatSlot.add(
-        createBox(0.64, 0.2, 0.64, this.pantsMat, 0, 0.08, 0),
-        createBox(0.56, 0.05, 0.32, this.pantsMat, 0, 0, 0.44) // visor towards face +z
-      );
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.1, 14), this.pantsMat);
+      cap.position.y = 0.06;
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.02, 0.16), this.pantsMat);
+      visor.position.set(0, 0.02, 0.2);
+      this.hatSlot.add(cap);
+      this.hatSlot.add(visor);
     } else if (type === 'beanie') {
-      this.hatSlot.add(
-        createBox(0.66, 0.32, 0.66, this.pantsMat, 0, 0.1, 0),
-        createMesh(new THREE.SphereGeometry(0.12, 12, 8), this.shirtMat, 0, 0.34, 0)
-      );
+      const beanie = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.pantsMat);
+      beanie.scale.set(1.0, 1.15, 1.0);
+      beanie.position.y = 0.05;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), this.shirtMat);
+      puff.position.y = 0.32;
+      this.hatSlot.add(beanie);
+      this.hatSlot.add(puff);
     } else if (type === 'tophat') {
-      this.hatSlot.add(
-        createMesh(new THREE.CylinderGeometry(0.45, 0.45, 0.05, 20), BLACK, 0, 0.03, 0),
-        createMesh(new THREE.CylinderGeometry(0.28, 0.28, 0.55, 20), BLACK, 0, 0.3, 0),
-        createMesh(new THREE.CylinderGeometry(0.29, 0.29, 0.1, 20), this.pantsMat, 0, 0.11, 0)
-      );
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 16), BLACK);
+      brim.position.y = 0.02;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.32, 16), BLACK);
+      crown.position.y = 0.18;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.07, 16), this.pantsMat);
+      band.position.y = 0.07;
+      this.hatSlot.add(brim, crown, band);
     } else if (type === 'crown') {
-      this.hatSlot.add(createMesh(new THREE.CylinderGeometry(0.32, 0.36, 0.22, 8, 1, true), GOLD, 0, 0.11, 0));
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.14, 8, 1, true), GOLD);
+      crown.position.y = 0.08;
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        this.hatSlot.add(
-          createMesh(new THREE.ConeGeometry(0.07, 0.18, 4), GOLD, Math.sin(a) * 0.3, 0.3, Math.cos(a) * 0.3)
-        );
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.12, 4), GOLD);
+        spike.position.set(Math.sin(a) * 0.21, 0.2, Math.cos(a) * 0.21);
+        this.hatSlot.add(spike);
       }
+      this.hatSlot.add(crown);
     }
   }
 
   private buildAccessory(type: string) {
     if (type === 'glasses') {
-      this.head.add(
-        createBox(0.2, 0.14, 0.04, BLACK, -0.14, 0.05, 0.32),
-        createBox(0.2, 0.14, 0.04, BLACK, 0.14, 0.05, 0.32),
-        createBox(0.1, 0.03, 0.03, BLACK, 0, 0.07, 0.32)
-      );
+      const frameMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+      const frames = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.06, 0.03), frameMat);
+      frames.position.set(0, 0.03, 0.23);
+      this.head.add(frames);
     } else if (type === 'earrings') {
-      this.head.add(
-        createMesh(new THREE.SphereGeometry(0.05, 8, 6), GOLD, -0.32, -0.11, 0),
-        createMesh(new THREE.SphereGeometry(0.05, 8, 6), GOLD, 0.32, -0.11, 0)
-      );
+      [-0.23, 0.23].forEach((x) => {
+        const earring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 12), GOLD);
+        earring.position.set(x, -0.04, 0);
+        earring.rotation.y = Math.PI / 2;
+        this.head.add(earring);
+      });
     } else if (type === 'beard') {
-      this.head.add(createBox(0.52, 0.22, 0.08, this.hairMat, 0, -0.19, 0.31));
+      const beard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.08), this.hairMat);
+      beard.position.set(0, -0.15, 0.18);
+      this.head.add(beard);
     } else if (type === 'scarf') {
-      this.accessorySlot.add(
-        createBox(0.7, 0.16, 0.5, this.pantsMat, 0, 1.66, 0),
-        createBox(0.16, 0.45, 0.06, this.pantsMat, 0.18, 1.45, -0.26)
-      );
+      const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.055, 8, 16), this.pantsMat);
+      scarf.position.set(0, 1.42, 0);
+      scarf.rotation.x = Math.PI / 2;
+      this.accessorySlot.add(scarf);
     } else if (type === 'backpack') {
-      this.accessorySlot.add(
-        createBox(0.56, 0.62, 0.26, this.pantsMat, 0, 1.25, -0.34),
-        createBox(0.58, 0.14, 0.28, this.shirtMat, 0, 1.5, -0.34)
-      );
+      const bagMat = new THREE.MeshStandardMaterial({ color: 0xd63031, roughness: 0.8 });
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.44, 0.2), bagMat);
+      pack.position.set(0, 1.05, -0.22);
+      pack.castShadow = true;
+      this.accessorySlot.add(pack);
     }
   }
 
@@ -271,26 +352,28 @@ export class AvatarGenerator {
     this.rightArm.rotation.y = 0;
 
     if (isMoving) {
-      this.animTime += delta * 12 * speedMultiplier;
+      this.animTime += delta * 11 * speedMultiplier;
       const swing = Math.sin(this.animTime);
 
-      this.leftLeg.rotation.x = swing * 0.9;
-      this.rightLeg.rotation.x = -swing * 0.9;
+      this.leftLeg.rotation.x = swing * 0.75;
+      this.rightLeg.rotation.x = -swing * 0.75;
 
-      this.leftArm.rotation.x = -swing * 0.8;
-      this.rightArm.rotation.x = swing * 0.8;
+      this.leftArm.rotation.x = -swing * 0.7;
+      this.rightArm.rotation.x = swing * 0.7;
 
-      this.bodyGroup.position.y = Math.abs(Math.cos(this.animTime)) * 0.08;
+      this.torso.position.y = 1.02 + Math.abs(Math.sin(this.animTime * 2)) * 0.04;
+      this.head.position.y = 1.56 + Math.abs(Math.sin(this.animTime * 2)) * 0.04;
     } else {
       this.animTime += delta * 2;
-      const breathe = Math.sin(this.animTime);
+      const breathe = Math.sin(this.animTime) * 0.02;
 
       this.leftLeg.rotation.x = 0;
       this.rightLeg.rotation.x = 0;
-      this.leftArm.rotation.x = breathe * 0.05;
-      this.rightArm.rotation.x = -breathe * 0.05;
+      this.leftArm.rotation.x = breathe * 0.5;
+      this.rightArm.rotation.x = -breathe * 0.5;
 
-      this.bodyGroup.position.y = (breathe + 1) * 0.015;
+      this.torso.position.y = 1.02 + breathe;
+      this.head.position.y = 1.56 + breathe * 1.2;
     }
   }
 
@@ -313,11 +396,11 @@ export class AvatarGenerator {
         this.animTime += delta * (Math.abs(speed) * 0.9 + 2.5) * speedDir;
         this.leftLeg.rotation.x = Math.sin(this.animTime) * 0.65;
         this.rightLeg.rotation.x = Math.sin(this.animTime + Math.PI) * 0.65;
-        this.bodyGroup.position.y = Math.sin(this.animTime * 2) * 0.02;
+        this.torso.position.y = 1.02 + Math.sin(this.animTime * 2) * 0.02;
       } else {
         this.leftLeg.rotation.x = 0.4;
         this.rightLeg.rotation.x = -0.4;
-        this.bodyGroup.position.y = 0;
+        this.torso.position.y = 1.02;
       }
     } else if (vehicleType === 'scooter') {
       this.torso.rotation.x = 0.1;
@@ -332,9 +415,12 @@ export class AvatarGenerator {
 
       if (isMoving) {
         this.animTime += delta * 15;
-        this.bodyGroup.position.y = Math.sin(this.animTime) * 0.02;
+        const vib = Math.sin(this.animTime) * 0.015;
+        this.torso.position.y = 1.02 + vib;
+        this.head.position.y = 1.56 + vib * 1.5;
       } else {
-        this.bodyGroup.position.y = 0;
+        this.torso.position.y = 1.02;
+        this.head.position.y = 1.56;
       }
     } else {
       // Danfo / Keke / Car driver posture
@@ -347,7 +433,8 @@ export class AvatarGenerator {
 
       this.leftLeg.rotation.x = 1.1;
       this.rightLeg.rotation.x = 1.1;
-      this.bodyGroup.position.y = -0.1;
+      this.torso.position.y = 0.92;
+      this.head.position.y = 1.46;
     }
   }
 }
